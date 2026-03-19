@@ -2,16 +2,16 @@ require("dotenv").config();
 
 const crypto = require("crypto");
 const express = require("express");
-const { ensureDb, getTag, saveTag, getTags, searchTags, updateTag } = require("./db");
-const { uploadBufferToWaveSpeed, generateSeedreamEdit } = require("./wavespeed");
-const { sanitizeTagKey, parseBase64Image } = require("./imageCollage");
+const { ensureDb, getTag, saveTag, getTags, searchTags, updateTag } = require("./server/db");
+const { uploadBufferToWaveSpeed, generateSeedreamEdit } = require("./server/wavespeed");
+const { sanitizeTagKey, parseBase64Image } = require("./server/imageCollage");
 const {
   TAG_TYPES,
   ASSET_GROUPS,
   extractTags,
   buildTagRecord,
   compilePrompt
-} = require("./tagCompiler");
+} = require("./server/tagCompiler");
 
 const app = express();
 const PORT = Number(process.env.PORT || 4989);
