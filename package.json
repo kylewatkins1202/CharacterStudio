@@ -1,0 +1,21 @@
+{
+  "name": "imagegenerator",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "eslint",
+    "lintFix": "eslint --fix"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "axios": "^1.13.6",
+    "dotenv": "^17.3.1",
+    "eslint": "^10.0.3",
+    "express": "^5.2.1",
+    "form-data": "^4.0.5",
+    "sharp": "^0.34.5"
+  }
+}

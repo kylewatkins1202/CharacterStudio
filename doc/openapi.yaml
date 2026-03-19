@@ -1,0 +1,706 @@
+openapi: 3.1.0
+info:
+  title: Tag-Based Seedream Backend API
+  version: 1.0.0
+  description: |
+    API for managing reusable prompt tags, compiling prompts with tag references,
+    and generating images through WaveSpeed Seedream.
+
+servers:
+  - url: http://localhost:4989
+
+tags:
+  - name: Health
+  - name: Tags
+  - name: Compile
+  - name: Generate
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check
+      operationId: healthCheck
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+                required: [ok]
+
+  /tag:
+    post:
+      tags: [Tags]
+      summary: Create or update a tag
+      operationId: createOrUpdateTag
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTagRequest"
+      responses:
+        "200":
+          description: Tag created or updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  tag:
+                    $ref: "#/components/schemas/Tag"
+                required: [ok, tag]
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /tags:
+    get:
+      tags: [Tags]
+      summary: List tags or search by key
+      operationId: listTags
+      parameters:
+        - in: query
+          name: key
+          required: false
+          schema:
+            type: string
+          description: Partial key search
+      responses:
+        "200":
+          description: Matching tags
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  count:
+                    type: integer
+                    minimum: 0
+                  tags:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Tag"
+                required: [ok, count, tags]
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /tags/{key}:
+    get:
+      tags: [Tags]
+      summary: Get a tag by exact key
+      operationId: getTagByKey
+      parameters:
+        - in: path
+          name: key
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Tag found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  tag:
+                    $ref: "#/components/schemas/Tag"
+                required: [ok, tag]
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /tags/{key}/images:
+    post:
+      tags: [Tags]
+      summary: Add images to an existing tag
+      operationId: addTagImages
+      parameters:
+        - in: path
+          name: key
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TagImagesRequest"
+      responses:
+        "200":
+          description: Images added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  tag:
+                    $ref: "#/components/schemas/Tag"
+                required: [ok, tag]
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+    delete:
+      tags: [Tags]
+      summary: Delete images from an existing tag by asset id
+      operationId: deleteTagImages
+      parameters:
+        - in: path
+          name: key
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeleteTagImagesRequest"
+      responses:
+        "200":
+          description: Images deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  totalDeleted:
+                    type: integer
+                    minimum: 0
+                  deleted:
+                    type: object
+                    additionalProperties:
+                      type: integer
+                      minimum: 0
+                  tag:
+                    $ref: "#/components/schemas/Tag"
+                required: [ok, totalDeleted, deleted, tag]
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /compile:
+    post:
+      tags: [Compile]
+      summary: Compile a prompt with tags into a raw prompt and ordered image list
+      operationId: compilePrompt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompileRequest"
+      responses:
+        "200":
+          description: Compiled prompt
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  compiled:
+                    $ref: "#/components/schemas/CompiledPrompt"
+                required: [ok, compiled]
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /generate:
+    post:
+      tags: [Generate]
+      summary: Generate an image using a compiled prompt and WaveSpeed Seedream
+      operationId: generateImage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateRequest"
+      responses:
+        "200":
+          description: Generation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  compiled:
+                    $ref: "#/components/schemas/CompiledPrompt"
+                  wavespeed:
+                    type: object
+                    additionalProperties: true
+                required: [ok, compiled, wavespeed]
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+components:
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    TagType:
+      type: string
+      enum: [character, prop, outfit, location]
+
+    AssetGroup:
+      type: string
+      enum: [face, body, prop, outfit, location]
+
+    Base64Image:
+      type: string
+      description: Base64 data URL for an image
+      examples:
+        - data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ...
+
+    Asset:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        url:
+          type: string
+        filename:
+          type: string
+        mimeType:
+          type: string
+        source:
+          type: string
+      required: [id, url, filename, mimeType, source]
+
+    TagAssets:
+      type: object
+      properties:
+        face:
+          type: array
+          items:
+            $ref: "#/components/schemas/Asset"
+        body:
+          type: array
+          items:
+            $ref: "#/components/schemas/Asset"
+        prop:
+          type: array
+          items:
+            $ref: "#/components/schemas/Asset"
+        outfit:
+          type: array
+          items:
+            $ref: "#/components/schemas/Asset"
+        location:
+          type: array
+          items:
+            $ref: "#/components/schemas/Asset"
+      required: [face, body, prop, outfit, location]
+
+    TagLock:
+      type: object
+      properties:
+        basicDescription:
+          type: string
+        appearanceDescription:
+          type: string
+        bodyDescription:
+          type: string
+      additionalProperties: false
+
+    TagMeta:
+      type: object
+      properties:
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Tag:
+      type: object
+      properties:
+        key:
+          type: string
+        type:
+          $ref: "#/components/schemas/TagType"
+        assets:
+          $ref: "#/components/schemas/TagAssets"
+        lock:
+          $ref: "#/components/schemas/TagLock"
+        meta:
+          $ref: "#/components/schemas/TagMeta"
+      required: [key, type, assets, lock, meta]
+
+    CreateTagRequest:
+      type: object
+      properties:
+        key:
+          type: string
+        type:
+          $ref: "#/components/schemas/TagType"
+        basicDescription:
+          type: string
+        appearanceDescription:
+          type: string
+        bodyDescription:
+          type: string
+        face:
+          type: array
+          items:
+            $ref: "#/components/schemas/Base64Image"
+        body:
+          type: array
+          items:
+            $ref: "#/components/schemas/Base64Image"
+        prop:
+          type: array
+          items:
+            $ref: "#/components/schemas/Base64Image"
+        outfit:
+          type: array
+          items:
+            $ref: "#/components/schemas/Base64Image"
+        location:
+          type: array
+          items:
+            $ref: "#/components/schemas/Base64Image"
+      required: [key, type]
+
+    TagImagesRequest:
+      type: object
+      properties:
+        face:
+          type: array
+          items:
+            $ref: "#/components/schemas/Base64Image"
+        body:
+          type: array
+          items:
+            $ref: "#/components/schemas/Base64Image"
+        prop:
+          type: array
+          items:
+            $ref: "#/components/schemas/Base64Image"
+        outfit:
+          type: array
+          items:
+            $ref: "#/components/schemas/Base64Image"
+        location:
+          type: array
+          items:
+            $ref: "#/components/schemas/Base64Image"
+
+    DeleteTagImagesRequest:
+      type: object
+      properties:
+        face:
+          type: array
+          items:
+            type: string
+            format: uuid
+        body:
+          type: array
+          items:
+            type: string
+            format: uuid
+        prop:
+          type: array
+          items:
+            type: string
+            format: uuid
+        outfit:
+          type: array
+          items:
+            type: string
+            format: uuid
+        location:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    CharacterTagLockOptions:
+      type: object
+      properties:
+        appearance:
+          type: boolean
+        bodyShape:
+          type: boolean
+      additionalProperties: false
+
+    BasicTagLockOptions:
+      type: object
+      properties:
+        basic:
+          type: boolean
+      additionalProperties: false
+
+    TagLocks:
+      type: object
+      description: |
+        Per-tag lock configuration. Character tags typically use appearance/bodyShape.
+        Prop, outfit, and location tags typically use basic.
+      additionalProperties:
+        oneOf:
+          - $ref: "#/components/schemas/CharacterTagLockOptions"
+          - $ref: "#/components/schemas/BasicTagLockOptions"
+
+    Position:
+      type: object
+      properties:
+        horizontal:
+          type: string
+          nullable: true
+          enum: [far_left, left, center_left, center, center_right, right, far_right, null]
+        vertical:
+          type: string
+          nullable: true
+          enum: [top, upper_middle, middle, lower_middle, bottom, null]
+        depth:
+          type: string
+          nullable: true
+          enum: [foreground, midground, background, null]
+
+    RelativePosition:
+      type: object
+      properties:
+        relation:
+          type: string
+          nullable: true
+          enum: [left_of, right_of, in_front_of, behind, next_to, between, overlapping, facing, null]
+        targetTag:
+          type: string
+          nullable: true
+        targetTags:
+          type: array
+          items:
+            type: string
+      required: [relation, targetTag, targetTags]
+
+    ParsedCharacter:
+      type: object
+      properties:
+        tag:
+          type: string
+        label:
+          type: string
+        position:
+          $ref: "#/components/schemas/Position"
+        relativePosition:
+          oneOf:
+            - $ref: "#/components/schemas/RelativePosition"
+            - type: "null"
+        facing:
+          type: string
+          nullable: true
+          enum:
+            [camera, left, right, away, toward_subject, downward, upward, three_quarter_left, three_quarter_right, null]
+        stance:
+          type: string
+          nullable: true
+          enum: [standing, sitting, kneeling, crouching, lying, leaning, walking, running, dancing, null]
+        support:
+          type: string
+          nullable: true
+          enum: [floor, bed, chair, couch, wall, table, car, ground, stairs, null]
+        poseDescription:
+          type: string
+        wardrobeDescription:
+          type: string
+        useAppearance:
+          type: boolean
+        useBodyShape:
+          type: boolean
+      required:
+        - tag
+        - label
+        - position
+        - relativePosition
+        - facing
+        - stance
+        - support
+        - poseDescription
+        - wardrobeDescription
+        - useAppearance
+        - useBodyShape
+
+    ParsedProp:
+      type: object
+      properties:
+        tag:
+          type: string
+        placement:
+          type: string
+        useBasicLock:
+          type: boolean
+      required: [tag, placement, useBasicLock]
+
+    ParsedOutfit:
+      type: object
+      properties:
+        tag:
+          type: string
+        placement:
+          type: string
+        useBasicLock:
+          type: boolean
+      required: [tag, placement, useBasicLock]
+
+    ParsedLocation:
+      type: object
+      properties:
+        tag:
+          type: string
+        useBasicLock:
+          type: boolean
+      required: [tag, useBasicLock]
+
+    ParsedPlan:
+      type: object
+      properties:
+        sceneDescription:
+          type: string
+        characters:
+          type: array
+          items:
+            $ref: "#/components/schemas/ParsedCharacter"
+        props:
+          type: array
+          items:
+            $ref: "#/components/schemas/ParsedProp"
+        outfits:
+          type: array
+          items:
+            $ref: "#/components/schemas/ParsedOutfit"
+        locations:
+          type: array
+          items:
+            $ref: "#/components/schemas/ParsedLocation"
+        extraDirectives:
+          type: array
+          items:
+            type: string
+      required: [sceneDescription, characters, props, outfits, locations, extraDirectives]
+
+    CompiledPrompt:
+      type: object
+      properties:
+        parsedPlan:
+          $ref: "#/components/schemas/ParsedPlan"
+        tagMap:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/Tag"
+        rawPrompt:
+          type: string
+        images:
+          type: array
+          items:
+            type: string
+        directives:
+          type: array
+          items:
+            type: string
+        sceneLines:
+          type: array
+          items:
+            type: string
+      required: [parsedPlan, tagMap, rawPrompt, images, directives, sceneLines]
+
+    CompileRequest:
+      type: object
+      properties:
+        prompt:
+          type: string
+        tagLocks:
+          $ref: "#/components/schemas/TagLocks"
+        parserOptions:
+          type: object
+          additionalProperties: true
+        visionOptions:
+          type: object
+          additionalProperties: true
+      required: [prompt]
+
+    GenerateRequest:
+      type: object
+      properties:
+        prompt:
+          type: string
+        size:
+          type: string
+          description: Example 1536x2048
+        tagLocks:
+          $ref: "#/components/schemas/TagLocks"
+        parserOptions:
+          type: object
+          additionalProperties: true
+        visionOptions:
+          type: object
+          additionalProperties: true
+        enable_sync_mode:
+          type: boolean
+        enable_base64_output:
+          type: boolean
+      required: [prompt]
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        details:
+          oneOf:
+            - type: string
+            - type: object
+              additionalProperties: true
+            - type: array
+              items: {}
+      required: [error]
