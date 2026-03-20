@@ -5,7 +5,8 @@ const WAVESPEED_API_KEY = process.env.WAVESPEED_API_KEY
 const WAVESPEED_BASE_URL = "https://api.wavespeed.ai/api/v3"
 
 const WAVESPEED_UPLOAD_URL = `${WAVESPEED_BASE_URL}/media/upload/binary`
-const WAVESPEED_SEEDREAM_EDIT_URL = `${WAVESPEED_BASE_URL}/bytedance/seedream-v4.5/edit`
+const WAVESPEED_SEEDREAM_URL = `${WAVESPEED_BASE_URL}/bytedance/seedream-v4.5`
+const WAVESPEED_SEEDREAM_EDIT_SEQUENTIAL_URL = `${WAVESPEED_BASE_URL}/bytedance/seedream-v4.5/edit-sequential`
 const WAVESPEED_ANY_LLM_URL = `${WAVESPEED_BASE_URL}/wavespeed-ai/any-llm`
 const WAVESPEED_ANY_LLM_VISION_URL = `${WAVESPEED_BASE_URL}/wavespeed-ai/any-llm/vision`
 
@@ -67,7 +68,7 @@ async function generateSeedreamEdit({
         payload.size = size
     }
 
-    const response = await axios.post(WAVESPEED_SEEDREAM_EDIT_URL, payload, {
+    const response = await axios.post(images.length === 0 ? WAVESPEED_SEEDREAM_URL: WAVESPEED_SEEDREAM_EDIT_SEQUENTIAL_URL, payload, {
         headers: getAuthHeaders({
             "Content-Type": "application/json"
         }),
@@ -192,12 +193,14 @@ function extractLLMText(result) {
     for (const arr of nestedCandidates) {
         if (Array.isArray(arr) && arr.length) {
             for (const item of arr) {
-                const text =
+                let text =
           item?.text ||
           item?.message?.content ||
           item?.content ||
           item?.output_text
-
+                if (!text && typeof item === "string") {
+                    text = item
+                }
                 if (typeof text === "string" && text.trim()) {
                     return text.trim()
                 }
@@ -232,7 +235,7 @@ module.exports = {
     extractLLMText,
     WAVESPEED_BASE_URL,
     WAVESPEED_UPLOAD_URL,
-    WAVESPEED_SEEDREAM_EDIT_URL,
+    WAVESPEED_SEEDREAM_EDIT_SEQUENTIAL_URL,
     WAVESPEED_ANY_LLM_URL,
     WAVESPEED_ANY_LLM_VISION_URL
 }

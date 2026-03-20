@@ -3,6 +3,7 @@ const path = require("path")
 
 const DATA_DIR = path.join(__dirname, "data")
 const TAG_DB_PATH = path.join(DATA_DIR, "tags.json")
+const GALLERY_DB_PATH = path.join(DATA_DIR, "gallery.json")
 
 async function ensureDb() {
     await fs.mkdir(DATA_DIR, { recursive: true })
@@ -12,6 +13,13 @@ async function ensureDb() {
     }
     catch {
         await fs.writeFile(TAG_DB_PATH, JSON.stringify({ tags: {} }, null, 2), "utf8")
+    }
+
+    try {
+        await fs.access(GALLERY_DB_PATH)
+    }
+    catch {
+        await fs.writeFile(GALLERY_DB_PATH, JSON.stringify({ entries: [] }, null, 2), "utf8")
     }
 }
 
@@ -25,6 +33,66 @@ async function writeDb(db) {
     await ensureDb()
     await fs.writeFile(TAG_DB_PATH, JSON.stringify(db, null, 2), "utf8")
 }
+
+// ─── Gallery ───────────────────────────────────────────────────────────────────
+
+async function readGallery() {
+    await ensureDb()
+    const raw = await fs.readFile(GALLERY_DB_PATH, "utf8")
+    return JSON.parse(raw)
+}
+
+async function writeGallery(data) {
+    await ensureDb()
+    await fs.writeFile(GALLERY_DB_PATH, JSON.stringify(data, null, 2), "utf8")
+}
+
+/**
+ * Save a generation entry to the gallery.
+ *
+ * @param {{
+ *   id: string,
+ *   imageUrl: string,
+ *   userPrompt: string,
+ *   compiledPrompt: string|null,
+ *   size: string,
+ *   cost: string|null,
+ *   timestamp: string
+ * }} entry
+ * @returns {Promise<any>}
+ */
+async function saveGalleryEntry(entry) {
+    const data = await readGallery()
+    data.entries.unshift(entry) // newest first
+    await writeGallery(data)
+    return entry
+}
+
+/**
+ * Get all gallery entries, newest first.
+ *
+ * @returns {Promise<any[]>}
+ */
+async function getGalleryEntries() {
+    const data = await readGallery()
+    return data.entries || []
+}
+
+/**
+ * Delete a gallery entry by id.
+ *
+ * @param {string} id
+ * @returns {Promise<boolean>}
+ */
+async function deleteGalleryEntry(id) {
+    const data = await readGallery()
+    const before = data.entries.length
+    data.entries = data.entries.filter((e) => e.id !== id)
+    await writeGallery(data)
+    return data.entries.length < before
+}
+
+// ─── Tags ──────────────────────────────────────────────────────────────────────
 
 /**
  * Get a single tag by exact key.
@@ -63,10 +131,6 @@ async function getTags(keys) {
 
 /**
  * Get all tags, optionally filtered by a partial key search.
- *
- * Examples:
- * - searchTags() -> all tags
- * - searchTags("ri") -> tags whose key includes "ri"
  *
  * @param {string} [query=""]
  * @returns {Promise<any[]>}
@@ -115,5 +179,8 @@ module.exports = {
     saveTag,
     getTags,
     searchTags,
-    updateTag
+    updateTag,
+    saveGalleryEntry,
+    getGalleryEntries,
+    deleteGalleryEntry,
 }

@@ -1,0 +1,88 @@
+{
+  "tags": {
+    "riley": {
+      "key": "riley",
+      "type": "character",
+      "assets": {
+        "face": [
+          {
+            "id": "542f7c28-c9eb-41ac-9f58-0cbf4c41aea8",
+            "url": "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1773977196594038876_tRyIR1ak.jpg",
+            "filename": "riley-face-1773977204925-0.jpg",
+            "mimeType": "image/jpeg",
+            "source": "base64"
+          }
+        ],
+        "body": [],
+        "prop": [],
+        "outfit": [],
+        "location": []
+      },
+      "lock": {
+        "basicDescription": "",
+        "appearanceDescription": "",
+        "bodyDescription": ""
+      },
+      "meta": {
+        "createdAt": "2026-03-20T00:26:50.365Z",
+        "updatedAt": "2026-03-20T13:53:26.090Z"
+      }
+    },
+    "jess": {
+      "key": "jess",
+      "type": "character",
+      "assets": {
+        "face": [
+          {
+            "id": "dc811430-ef71-4559-8044-5f64b1557799",
+            "url": "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1773975546363545696_2Oi8gqyJ.png",
+            "filename": "jess-face-1773975553925-0.png",
+            "mimeType": "image/png",
+            "source": "base64"
+          }
+        ],
+        "body": [],
+        "prop": [],
+        "outfit": [],
+        "location": []
+      },
+      "lock": {
+        "basicDescription": "",
+        "appearanceDescription": "",
+        "bodyDescription": ""
+      },
+      "meta": {
+        "createdAt": "2026-03-20T02:59:24.042Z",
+        "updatedAt": "2026-03-20T13:53:39.765Z"
+      }
+    },
+    "alba": {
+      "key": "alba",
+      "type": "character",
+      "assets": {
+        "face": [
+          {
+            "id": "039f2809-3d93-4e6c-b07f-f487f1390ea5",
+            "url": "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774015420358337392_U4sclvEN.png",
+            "filename": "alba-face-1774015428062-0.png",
+            "mimeType": "image/png",
+            "source": "base64"
+          }
+        ],
+        "body": [],
+        "prop": [],
+        "outfit": [],
+        "location": []
+      },
+      "lock": {
+        "basicDescription": "",
+        "appearanceDescription": "",
+        "bodyDescription": ""
+      },
+      "meta": {
+        "createdAt": "2026-03-20T03:00:38.879Z",
+        "updatedAt": "2026-03-20T14:03:50.538Z"
+      }
+    }
+  }
+}

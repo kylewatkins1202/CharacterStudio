@@ -259,10 +259,14 @@ async function collapseAssetGroupToSingleUpload(tagKey, groupName, assets) {
         return assets
     }
 
-    const buffers = assets.map((asset) => asset.buffer).filter(Boolean)
-    if (buffers.length !== assets.length) {
-        throw new Error(`Cannot collapse ${tagKey}.${groupName}: missing buffer`)
-    }
+    const buffers = await Promise.all(
+        assets.map(async (asset) => {
+            if (!asset.url) throw new Error(`Cannot collapse ${tagKey}.${groupName}: asset has no url or buffer`)
+            const res = await fetch(asset.url)
+            if (!res.ok) throw new Error(`Failed to fetch asset ${asset.url}: ${res.status}`)
+            return Buffer.from(await res.arrayBuffer())
+        })
+    )
 
     const collageBuffer = await createImageGridFromBuffers(buffers)
     const filename = stableFilename(`${tagKey}-${groupName}`, "jpg")
@@ -525,6 +529,8 @@ function buildPromptPlanningSystemPrompt() {
         "- targetTag should be used for one target. targetTags should be used for multi-target relations like between.",
         "- Use null for unknown placement fields.",
         "- Props are handheld or scene objects. Locations are environments/backgrounds. Outfits are clothing references.",
+        "- sceneDescription should contain ALL non-tag scene lines verbatim, preserving paragraph breaks as \\n\\n between them. Do not summarize or restructure the scene prose.",
+"- Do not move scene context into character fields and do not move character context into sceneDescription.",
         "- Do not add explanations outside JSON."
     ].join("\n")
 }
@@ -1069,58 +1075,17 @@ function buildRelativePositionPhrase(relativePosition) {
  * @returns {string}
  */
 function buildCharacterSceneSentence(character) {
-    const parts = []
     const label = character.label || character.tag || "subject"
-
-    parts.push(label)
-
-    const positionPhrase = buildPositionPhrase(character.position)
-    if (positionPhrase) {
-        parts.push(`is in the ${positionPhrase}`)
-    }
+    const parts = []
 
     const relativePhrase = buildRelativePositionPhrase(character.relativePosition)
-    if (relativePhrase) {
-        parts.push(relativePhrase)
-    }
+    if (relativePhrase) parts.push(relativePhrase)
 
-    if (character.stance) {
-        parts.push(`is ${character.stance}`)
-    }
+    if (character.wardrobeDescription) parts.push(`wearing ${character.wardrobeDescription}`)
+    if (character.poseDescription) parts.push(character.poseDescription)
 
-    if (character.support) {
-        parts.push(`on the ${character.support}`)
-    }
-
-    if (character.facing) {
-        const facingMap = {
-            camera: "facing the camera",
-            left: "facing left",
-            right: "facing right",
-            away: "facing away from the camera",
-            toward_subject: "turned toward another subject",
-            downward: "looking downward",
-            upward: "looking upward",
-            three_quarter_left: "at a three-quarter left angle",
-            three_quarter_right: "at a three-quarter right angle"
-        }
-
-        parts.push(facingMap[character.facing] || `facing ${character.facing}`)
-    }
-
-    if (character.wardrobeDescription) {
-        parts.push(`wearing ${character.wardrobeDescription}`)
-    }
-
-    if (character.poseDescription) {
-        parts.push(character.poseDescription)
-    }
-
-    let sentence = parts.join(" ").trim()
-    if (!sentence.endsWith(".")) {
-        sentence += "."
-    }
-    return sentence
+    const body = parts.filter(Boolean).join(", ")
+    return body ? `${label}, ${body}.` : `${label}.`
 }
 
 /**
@@ -1130,10 +1095,6 @@ function buildCharacterSceneSentence(character) {
  * @returns {string}
  */
 function buildCharacterDirectiveLabel(character) {
-    const positionPhrase = buildPositionPhrase(character.position)
-    if (positionPhrase) {
-        return `${character.label} in the ${positionPhrase}`
-    }
     return character.label || character.tag || "subject"
 }
 
@@ -1160,7 +1121,12 @@ function buildRawPromptFromPlan({ originalPrompt, parsedPlan, tagMap }) {
     let imageIndex = 1
 
     if (parsedPlan.sceneDescription) {
-        sceneLines.push(parsedPlan.sceneDescription)
+        // Split on double newlines to preserve paragraph breaks from the original
+        parsedPlan.sceneDescription
+            .split(/\n{2,}/)
+            .map(s => s.trim())
+            .filter(Boolean)
+            .forEach(para => sceneLines.push(para))
     }
     else {
         sceneLines.push(originalPrompt)
@@ -1172,7 +1138,7 @@ function buildRawPromptFromPlan({ originalPrompt, parsedPlan, tagMap }) {
             continue
         }
 
-        sceneLines.push(buildCharacterSceneSentence(character))
+        const sceneSentence = buildCharacterSceneSentence(character)
 
         const label = buildCharacterDirectiveLabel(character)
         const assets = getCharacterAssetsForPlan(tag)
@@ -1196,15 +1162,19 @@ function buildRawPromptFromPlan({ originalPrompt, parsedPlan, tagMap }) {
             imageIndex += 1
         }
 
-        if (character.useAppearance && faceStart && bodyImageIndex && character.useBodyShape) {
-            directives.push(
-                `Use image[${faceStart}-${faceEnd}] for the appearance of ${label} and image[${bodyImageIndex}] for the body shape of ${label}.`
-            )
+        const poseClause = character.poseDescription
+            ? `, ${character.poseDescription}`
+            : ""
+        const wardrobeClause = character.wardrobeDescription
+            ? ` wearing ${character.wardrobeDescription}`
+            : ""
+
+        if (character.useAppearance && faceStart !== null) {
+            const range = faceEnd > faceStart ? `${faceStart}-${faceEnd}` : `${faceStart}`
+            directives.push(`Use image[${range}] for ${label}${poseClause}${wardrobeClause}.`)
         }
-        else if (character.useAppearance && faceStart) {
-            directives.push(`Use image[${faceStart}-${faceEnd}] for the appearance of ${label}.`)
-        }
-        else if (character.useBodyShape && bodyImageIndex) {
+
+        if (character.useBodyShape && bodyImageIndex !== null) {
             directives.push(`Use image[${bodyImageIndex}] for the body shape of ${label}.`)
         }
 
@@ -1327,7 +1297,7 @@ function buildRawPromptFromPlan({ originalPrompt, parsedPlan, tagMap }) {
         ...sceneLines.filter(Boolean),
         "",
         ...directives.filter(Boolean)
-    ].join("\n")
+    ].join("\n\n")
 
     return {
         rawPrompt,
