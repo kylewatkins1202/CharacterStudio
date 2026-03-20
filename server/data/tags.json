@@ -62,10 +62,10 @@
       "assets": {
         "face": [
           {
-            "id": "039f2809-3d93-4e6c-b07f-f487f1390ea5",
-            "url": "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774015420358337392_U4sclvEN.png",
-            "filename": "alba-face-1774015428062-0.png",
-            "mimeType": "image/png",
+            "id": "72d7e2dc-0403-4851-91b9-d874e7343db2",
+            "url": "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774016822297420031_L8ybkuDO.jpg",
+            "filename": "alba-face-1774016830668-0.jpg",
+            "mimeType": "image/jpeg",
             "source": "base64"
           }
         ],
@@ -81,7 +81,63 @@
       },
       "meta": {
         "createdAt": "2026-03-20T03:00:38.879Z",
-        "updatedAt": "2026-03-20T14:03:50.538Z"
+        "updatedAt": "2026-03-20T14:27:13.814Z"
+      }
+    },
+    "alyssa": {
+      "key": "alyssa",
+      "type": "character",
+      "assets": {
+        "face": [
+          {
+            "id": "e6b62ace-50ae-4f4b-928a-2a63577f26a3",
+            "url": "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774016352846881096_Pm6fpyhC.jpg",
+            "filename": "alyssa-face-1774016362208-0.jpg",
+            "mimeType": "image/jpeg",
+            "source": "base64"
+          }
+        ],
+        "body": [],
+        "prop": [],
+        "outfit": [],
+        "location": []
+      },
+      "lock": {
+        "basicDescription": "",
+        "appearanceDescription": "",
+        "bodyDescription": ""
+      },
+      "meta": {
+        "createdAt": "2026-03-20T14:19:22.995Z",
+        "updatedAt": "2026-03-20T14:19:22.995Z"
+      }
+    },
+    "amara": {
+      "key": "amara",
+      "type": "character",
+      "assets": {
+        "face": [
+          {
+            "id": "a6f5329f-741f-4a18-9333-949fa6761490",
+            "url": "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774018583069912183_Q1bU4dnw.png",
+            "filename": "amara-face-1774018590506-0.png",
+            "mimeType": "image/png",
+            "source": "base64"
+          }
+        ],
+        "body": [],
+        "prop": [],
+        "outfit": [],
+        "location": []
+      },
+      "lock": {
+        "basicDescription": "",
+        "appearanceDescription": "",
+        "bodyDescription": ""
+      },
+      "meta": {
+        "createdAt": "2026-03-20T14:56:33.295Z",
+        "updatedAt": "2026-03-20T14:56:33.295Z"
       }
     }
   }

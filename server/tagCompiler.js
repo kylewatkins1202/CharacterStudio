@@ -520,6 +520,7 @@ function buildPromptPlanningSystemPrompt() {
         "}",
         "",
         "Guidelines:",
+        "- label should be a descriptive noun phrase extracted from the prompt that identifies the character's role or position (e.g. 'the woman on the left', 'the woman in the center'). Never use the tag key as the label.",
         "- Keep character appearance out of poseDescription.",
         "- Put clothing described directly in the prompt into wardrobeDescription on the relevant character.",
         "- Use outfits[] only for tagged outfit references such as @dress1 or @look2.",
@@ -1171,11 +1172,11 @@ function buildRawPromptFromPlan({ originalPrompt, parsedPlan, tagMap }) {
 
         if (character.useAppearance && faceStart !== null) {
             const range = faceEnd > faceStart ? `${faceStart}-${faceEnd}` : `${faceStart}`
-            directives.push(`Use image[${range}] for ${label}${poseClause}${wardrobeClause}.`)
+            directives.push(`Use image[${range}] exclusively for ${label}${poseClause}${wardrobeClause}.`)
         }
 
         if (character.useBodyShape && bodyImageIndex !== null) {
-            directives.push(`Use image[${bodyImageIndex}] for the body shape of ${label}.`)
+            directives.push(`Use image[${bodyImageIndex}] exclusively for the body shape of ${label}.`)
         }
 
         if (character.useAppearance && tag.lock?.appearanceDescription) {
@@ -1296,7 +1297,9 @@ function buildRawPromptFromPlan({ originalPrompt, parsedPlan, tagMap }) {
     const rawPrompt = [
         ...sceneLines.filter(Boolean),
         "",
-        ...directives.filter(Boolean)
+        ...directives.filter(Boolean),
+        "",
+        "Each person is a completely distinct individual. Do not mix or merge facial features, hair, or appearance between subjects"
     ].join("\n\n")
 
     return {
