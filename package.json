@@ -4,6 +4,10 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js",
+    "dev:server": "node --watch server.js",
+    "dev:client": "npm run dev --prefix app",
+    "dev": "concurrently -n SERVER,CLIENT -c yellow,cyan \"npm run dev:server\" \"npm run dev:client\"",
     "lint": "eslint",
     "lintFix": "eslint --fix"
   },
@@ -12,6 +16,7 @@
   "description": "",
   "dependencies": {
     "axios": "^1.13.6",
+    "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "eslint": "^10.0.3",
     "express": "^5.2.1",
