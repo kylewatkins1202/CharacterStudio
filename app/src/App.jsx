@@ -495,9 +495,56 @@ function TagDetail({ tag, onClose, onUpdated, onDeleted, toast }) {
   );
 }
 
+function DownloadButton({ entry, onDownloaded }) {
+  const [downloading, setDownloading] = useState(false);
+
+  if (entry.downloaded) {
+    return (
+      <div style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid #1a1a1a", color: "#2a2a2a", fontFamily: "'DM Mono', monospace", fontSize: 11, userSelect: "none" }}>
+        ✓ Saved
+      </div>
+    );
+  }
+
+  const handleDownload = async () => {
+    setDownloading(true);
+    try {
+      const res = await fetch(entry.imageUrl);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const ext = blob.type.includes("png") ? "png" : "jpg";
+      a.href = url;
+      a.download = `seedream-${entry.id.slice(0, 8)}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      onDownloaded(entry.id);
+    } catch {
+      // If fetch fails (e.g. CORS on the image URL) fall back to opening in new tab
+      window.open(entry.imageUrl, "_blank");
+      onDownloaded(entry.id);
+    }
+    setDownloading(false);
+  };
+
+  return (
+    <button
+      onClick={handleDownload}
+      disabled={downloading}
+      style={{ padding: "4px 10px", background: "none", border: "1px solid #1e1e1e", borderRadius: 6, color: downloading ? "#2a2a2a" : "#555", fontFamily: "'DM Mono', monospace", fontSize: 11, cursor: downloading ? "not-allowed" : "pointer", transition: "all 0.15s", whiteSpace: "nowrap" }}
+      onMouseEnter={(e) => { if (!downloading) { e.currentTarget.style.borderColor = "#555"; e.currentTarget.style.color = "#e0e0e0"; } }}
+      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#1e1e1e"; e.currentTarget.style.color = downloading ? "#2a2a2a" : "#555"; }}
+    >
+      {downloading ? "…" : "↓ Save"}
+    </button>
+  );
+}
+
 // ─── Generate Page ─────────────────────────────────────────────────────────────
 // State is owned by App so it survives tab switches
-function GeneratePage({ tags, toast, prompt, setPrompt, aspect, setAspect, baseSize, setBaseSize, loading, setLoading, result, setResult, compiled, setCompiled, onGenerated, referenceImages, setReferenceImages }) {
+function GeneratePage({ tags, toast, prompt, setPrompt, aspect, setAspect, baseSize, setBaseSize, loading, setLoading, result, setResult, compiled, setCompiled, onGenerated, referenceImages, setReferenceImages, resetCache, setResetCache }) {
   const computedSize = computeSize(aspect, baseSize);
   const cost = estimateCost(computedSize);
   const imageUrl = result ? extractImageUrl(result) : null;
@@ -506,12 +553,19 @@ function GeneratePage({ tags, toast, prompt, setPrompt, aspect, setAspect, baseS
     if (!prompt.trim()) return toast.add("Please enter a prompt", "error");
     setLoading(true); setResult(null); setCompiled(null);
     try {
-      const res = await api.post("/generate", { prompt, size: computedSize, referenceImages: referenceImages.filter(item => typeof item === "string") });
+      const res = await api.post("/generate", {
+        prompt,
+        size: computedSize,
+        referenceImages: referenceImages.filter(item => typeof item === "string"),
+        resetCache,
+      })
+      
       if (res.ok) {
         setResult(res.wavespeed);
         setCompiled(res.compiled);
         toast.add("Image generated!", "success");
-        onGenerated(); // tell App to refresh the gallery count
+        setResetCache(false); // auto-uncheck after use
+        onGenerated();
       } else {
         toast.add(res.error || "Generation failed", "error");
       }
@@ -571,6 +625,17 @@ function GeneratePage({ tags, toast, prompt, setPrompt, aspect, setAspect, baseS
               est. <span style={{ color: "#666" }}>${cost}</span>
             </span>
           )}
+          <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", userSelect: "none" }}>
+            <input
+              type="checkbox"
+              checked={resetCache}
+              onChange={(e) => setResetCache(e.target.checked)}
+              style={{ accentColor: "#f0f0f0", cursor: "pointer", width: 13, height: 13 }}
+            />
+            <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: resetCache ? "#888" : "#333", transition: "color 0.15s" }}>
+              Reset cache
+            </span>
+          </label>
           <button onClick={generate} disabled={loading} style={{ padding: "10px 32px", background: loading ? "#111" : "#f0f0f0", color: loading ? "#333" : "#000", border: "none", borderRadius: 8, fontFamily: "'DM Mono', monospace", fontSize: 13, fontWeight: 600, cursor: loading ? "not-allowed" : "pointer", transition: "all 0.2s", whiteSpace: "nowrap" }}>
             {loading ? "Generating…" : "Generate →"}
           </button>
@@ -620,7 +685,7 @@ function GeneratePage({ tags, toast, prompt, setPrompt, aspect, setAspect, baseS
 }
 
 // ─── Gallery Page ──────────────────────────────────────────────────────────────
-function GalleryPage({ toast, onUsePrompt }) {
+function GalleryPage({ toast, onUsePrompt, onAddReference }) {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -674,7 +739,7 @@ function GalleryPage({ toast, onUsePrompt }) {
           No images yet — generate one to get started
         </div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(302px, 1fr))", gap: 12 }}>
           {entries.map((entry) => (
             <div key={entry.id} style={{ background: "#0a0a0a", border: "1px solid #141414", borderRadius: 12, overflow: "hidden" }}>
               <img src={entry.imageUrl} alt="" style={{ width: "100%", display: "block" }} />
@@ -712,6 +777,15 @@ function GalleryPage({ toast, onUsePrompt }) {
                     >
                       ↑ Use
                     </button>
+                    <button
+                      onClick={() => { onAddReference(entry.imageUrl); toast.add("Added as reference", "success"); }}
+                      style={{ padding: "4px 10px", background: "none", border: "1px solid #1e1e1e", borderRadius: 6, color: "#555", fontFamily: "'DM Mono', monospace", fontSize: 11, cursor: "pointer", transition: "all 0.15s", whiteSpace: "nowrap" }}
+                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#34d399aa"; e.currentTarget.style.color = "#34d399"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#1e1e1e"; e.currentTarget.style.color = "#555"; }}
+                    >
+                      + Ref
+                    </button>
+                    <DownloadButton entry={entry} onDownloaded={(id) => setEntries((p) => p.map((e) => e.id === id ? { ...e, downloaded: true } : e))} />
                     <button
                       onClick={() => handleDelete(entry.id)}
                       style={{ padding: "4px 10px", background: "none", border: "1px solid #1e1e1e", borderRadius: 6, color: "#333", fontFamily: "'DM Mono', monospace", fontSize: 11, cursor: "pointer", transition: "all 0.15s" }}
@@ -826,6 +900,8 @@ export default function App() {
   const [result,   setResult]   = useState(null);
   const [compiled, setCompiled] = useState(null);
 
+  const [resetCache, setResetCache] = useState(false);
+
   const [referenceImages, setReferenceImages] = useState([]); // base64 strings
 
   const loadTags = useCallback(async () => {
@@ -839,6 +915,10 @@ export default function App() {
 
   useEffect(() => { loadTags(); loadGalleryCount(); }, [loadTags, loadGalleryCount]);
 
+  const handleAddReference = useCallback((imageUrl) => {
+    setReferenceImages((p) => [...p, { url: imageUrl, isUrl: true }]);
+    setPage("generate");
+  }, [setReferenceImages]);
   // Called after a successful generation — bumps the badge and
   // if gallery is open it will re-fetch on its own via its useEffect
   const handleGenerated = useCallback(() => {
@@ -932,12 +1012,18 @@ export default function App() {
           compiled={compiled} setCompiled={setCompiled}
           referenceImages={referenceImages}
           setReferenceImages={setReferenceImages}
+          resetCache={resetCache}
+          setResetCache={setResetCache}
           onGenerated={handleGenerated}
         />
       </div>
 
       {page === "gallery" && (
-        <GalleryPage toast={toast} onUsePrompt={handleUsePrompt} />
+        <GalleryPage
+          toast={toast}
+          onUsePrompt={handleUsePrompt}
+          onAddReference={handleAddReference}
+        />
       )}
 
       <div style={{ display: page === "tags" ? "block" : "none" }}>

@@ -1,4 +1,5 @@
-const path = require('path')
+const fs = require("fs/promises");
+const path = require("path");
 const envPath = process.env.NODE_ENV === "production"
   ? path.join(process.resourcesPath, ".env")
   : path.join(__dirname, ".env");
@@ -65,10 +66,27 @@ function serializeTag(tag) {
     )
   };
 }
+  
+// ─── Persistent prompt compile cache ──────────────────────────────────────────
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const CACHE_PATH = path.join(__dirname, "server", "data", "prompt_cache.json");
 
-// ─── Prompt compile cache ──────────────────────────────────────────────────────
-const promptCache = new Map();
-const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+async function readCache() {
+  try {
+    const raw = await fs.readFile(CACHE_PATH, "utf8");
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+}
+
+async function writeCache(cache) {
+  try {
+    await fs.writeFile(CACHE_PATH, JSON.stringify(cache, null, 2), "utf8");
+  } catch (err) {
+    console.error("Failed to write prompt cache:", err.message);
+  }
+}
 
 function makeCacheKey(prompt, tagLocks, tags) {
   const tagStamps = tags.map((t) => `${t.key}:${t.meta?.updatedAt || ""}`).join(",");
@@ -76,15 +94,31 @@ function makeCacheKey(prompt, tagLocks, tags) {
   return crypto.createHash("sha256").update(raw).digest("hex");
 }
 
-function getCached(key) {
-  const entry = promptCache.get(key);
+async function getCached(key) {
+  const cache = await readCache();
+  const entry = cache[key];
   if (!entry) return null;
-  if (Date.now() - entry.timestamp > CACHE_TTL_MS) { promptCache.delete(key); return null; }
+  if (Date.now() - entry.timestamp > CACHE_TTL_MS) {
+    // Expired — clean it up
+    delete cache[key];
+    await writeCache(cache);
+    return null;
+  }
   return entry.value;
 }
 
-function setCached(key, value) {
-  promptCache.set(key, { value, timestamp: Date.now() });
+async function setCached(key, value) {
+  const cache = await readCache();
+  cache[key] = { value, timestamp: Date.now() };
+  await writeCache(cache);
+}
+
+async function deleteCached(key) {
+  const cache = await readCache();
+  if (cache[key]) {
+    delete cache[key];
+    await writeCache(cache);
+  }
 }
 
 function createStoredAsset({ uploaded, filename, mimeType, buffer, source = "base64" }) {
@@ -306,6 +340,7 @@ api.post("/generate", async (req, res) => {
     const enableSyncMode = req.body.enable_sync_mode !== false;
     const enableBase64Output = req.body.enable_base64_output === true;
     const rawReferenceImages = Array.isArray(req.body.referenceImages) ? req.body.referenceImages : [];
+    const resetCache = req.body.resetCache === true;
 
     if (!prompt) return res.status(400).json({ error: "prompt is required" });
 
@@ -316,16 +351,23 @@ api.post("/generate", async (req, res) => {
 
     if (tags.length > 0) {
       const cacheKey = makeCacheKey(prompt, tagLocks, tags);
-      compiled = getCached(cacheKey);
+
+      if (resetCache) {
+        await deleteCached(cacheKey);
+        console.log(`[cache reset] ${cacheKey.slice(0, 12)}…`);
+      }
+
+      compiled = await getCached(cacheKey);
+
       if (compiled) {
         console.log(`[cache hit] ${cacheKey.slice(0, 12)}…`);
       } else {
         compiled = await compilePrompt({
           prompt, tags, tagLocks,
           parserOptions: { model: LLM_MODEL },
-          visionOptions: { enable: false, force: false, model: VISION_MODEL }
+          visionOptions: { enable: true, force: false, model: VISION_MODEL }
         });
-        setCached(cacheKey, compiled);
+        await setCached(cacheKey, compiled);
       }
     }
 
