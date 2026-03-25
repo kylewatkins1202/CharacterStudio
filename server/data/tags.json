@@ -283,6 +283,42 @@
         "createdAt": "2026-03-25T09:05:22.801Z",
         "updatedAt": "2026-03-25T09:05:22.801Z"
       }
+    },
+    "amara_hat": {
+      "key": "amara_hat",
+      "type": "character",
+      "assets": {
+        "face": [
+          {
+            "id": "428e91f5-263b-4573-a256-3a449b245bdd",
+            "url": "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774482999058780938_1YjHQ1lA.png",
+            "filename": "amara_hat-face-1774483002814-0.png",
+            "mimeType": "image/png",
+            "source": "base64"
+          }
+        ],
+        "body": [],
+        "prop": [],
+        "outfit": [],
+        "location": [
+          {
+            "id": "90f2881f-982a-4407-91fd-104fb0605680",
+            "url": "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774483002633488183_KkuDMW6I.jpg",
+            "filename": "amara_hat-location-1774483012901-0.jpg",
+            "mimeType": "image/jpeg",
+            "source": "base64"
+          }
+        ]
+      },
+      "lock": {
+        "basicDescription": "",
+        "appearanceDescription": "black, straight hair, hat",
+        "bodyDescription": ""
+      },
+      "meta": {
+        "createdAt": "2026-03-25T23:56:56.437Z",
+        "updatedAt": "2026-03-25T23:56:56.437Z"
+      }
     }
   }
 }

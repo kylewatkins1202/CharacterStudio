@@ -7,7 +7,7 @@
 
 const express = require("express");
 const db = require("../db");
-const { extractTags, compilePrompt } = require("../tagCompiler");
+const { extractTags, compilePrompt } = require("../utils/tagCompiler");
 
 const router = express.Router();
 

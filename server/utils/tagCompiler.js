@@ -12,24 +12,24 @@
  *   - an ordered images[] array
  */
 
-/** @typedef {import('./types').Tag} Tag */
-/** @typedef {import('./types').TagAsset} TagAsset */
-/** @typedef {import('./types').TagAssets} TagAssets */
-/** @typedef {import('./types').TagLock} TagLock */
-/** @typedef {import('./types').TagType} TagType */
-/** @typedef {import('./types').AssetGroup} AssetGroup */
-/** @typedef {import('./types').TagSummary} TagSummary */
-/** @typedef {import('./types').ParsedPlan} ParsedPlan */
-/** @typedef {import('./types').PlanCharacter} PlanCharacter */
-/** @typedef {import('./types').PlanProp} PlanProp */
-/** @typedef {import('./types').PlanOutfit} PlanOutfit */
-/** @typedef {import('./types').PlanLocation} PlanLocation */
-/** @typedef {import('./types').CharacterPosition} CharacterPosition */
-/** @typedef {import('./types').RelativePosition} RelativePosition */
-/** @typedef {import('./types').LLMOptions} LLMOptions */
-/** @typedef {import('./types').VisionEnrichOptions} VisionEnrichOptions */
-/** @typedef {import('./types').BuildRawPromptResult} BuildRawPromptResult */
-/** @typedef {import('./types').CompileResult} CompileResult */
+/** @typedef {import('../types').Tag} Tag */
+/** @typedef {import('../types').TagAsset} TagAsset */
+/** @typedef {import('../types').TagAssets} TagAssets */
+/** @typedef {import('../types').TagLock} TagLock */
+/** @typedef {import('../types').TagType} TagType */
+/** @typedef {import('../types').AssetGroup} AssetGroup */
+/** @typedef {import('../types').TagSummary} TagSummary */
+/** @typedef {import('../types').ParsedPlan} ParsedPlan */
+/** @typedef {import('../types').PlanCharacter} PlanCharacter */
+/** @typedef {import('../types').PlanProp} PlanProp */
+/** @typedef {import('../types').PlanOutfit} PlanOutfit */
+/** @typedef {import('../types').PlanLocation} PlanLocation */
+/** @typedef {import('../types').CharacterPosition} CharacterPosition */
+/** @typedef {import('../types').RelativePosition} RelativePosition */
+/** @typedef {import('../types').LLMOptions} LLMOptions */
+/** @typedef {import('../types').VisionEnrichOptions} VisionEnrichOptions */
+/** @typedef {import('../types').BuildRawPromptResult} BuildRawPromptResult */
+/** @typedef {import('../types').CompileResult} CompileResult */
 
 const crypto = require("crypto")
 const { createImageGridFromBuffers, assetUrls } = require("./imageCollage")
@@ -38,7 +38,7 @@ const {
     callAnyLLM,
     callAnyLLMVision,
     extractLLMText
-} = require("./wavespeed")
+} = require("../wavespeed")
 
 /** Maximum number of input images supported by the current Seedream edit flow. */
 const MODEL_MAX_IMAGES = 10
