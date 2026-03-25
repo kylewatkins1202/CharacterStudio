@@ -498,7 +498,7 @@ function TagDetail({ tag, onClose, onUpdated, onDeleted, toast }) {
 function DownloadButton({ entry, onDownloaded }) {
   const [downloading, setDownloading] = useState(false);
 
-  if (entry.downloaded) {
+  if (entry.localUrl) {
     return (
       <div style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid #1a1a1a", color: "#2a2a2a", fontFamily: "'DM Mono', monospace", fontSize: 11, userSelect: "none" }}>
         ✓ Saved
@@ -509,22 +509,14 @@ function DownloadButton({ entry, onDownloaded }) {
   const handleDownload = async () => {
     setDownloading(true);
     try {
-      const res = await fetch(entry.imageUrl);
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      const ext = blob.type.includes("png") ? "png" : "jpg";
-      a.href = url;
-      a.download = `seedream-${entry.id.slice(0, 8)}.${ext}`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      onDownloaded(entry.id);
-    } catch {
-      // If fetch fails (e.g. CORS on the image URL) fall back to opening in new tab
-      window.open(entry.imageUrl, "_blank");
-      onDownloaded(entry.id);
+      const res = await api.post(`/gallery/${entry.id}/download`);
+      if (res.ok) {
+        onDownloaded(entry.id, res.localUrl);
+      } else {
+        console.error("Download failed:", res.error);
+      }
+    } catch (err) {
+      console.error("Download error:", err);
     }
     setDownloading(false);
   };
@@ -556,9 +548,15 @@ function GeneratePage({ tags, toast, prompt, setPrompt, aspect, setAspect, baseS
       const res = await api.post("/generate", {
         prompt,
         size: computedSize,
-        referenceImages: referenceImages.filter(item => typeof item === "string"),
+        referenceImages: referenceImages
+            .filter(item => !item.isUrl)
+            .map(item => ({ data: item.src, purpose: item.purpose })),
+        referenceImageUrls: referenceImages
+            .filter(item => item.isUrl)
+            .map(item => ({ url: item.src, purpose: item.purpose })),
         resetCache,
-      })
+      });
+
       
       if (res.ok) {
         setResult(res.wavespeed);
@@ -742,7 +740,7 @@ function GalleryPage({ toast, onUsePrompt, onAddReference }) {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(302px, 1fr))", gap: 12 }}>
           {entries.map((entry) => (
             <div key={entry.id} style={{ background: "#0a0a0a", border: "1px solid #141414", borderRadius: 12, overflow: "hidden" }}>
-              <img src={entry.imageUrl} alt="" style={{ width: "100%", display: "block" }} />
+              <img src={entry.localUrl || entry.imageUrl} alt="" style={{ width: "100%", display: "block" }} />
               <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
                 {/* User prompt — what they actually typed */}
                 <p style={{
@@ -785,7 +783,12 @@ function GalleryPage({ toast, onUsePrompt, onAddReference }) {
                     >
                       + Ref
                     </button>
-                    <DownloadButton entry={entry} onDownloaded={(id) => setEntries((p) => p.map((e) => e.id === id ? { ...e, downloaded: true } : e))} />
+                    <DownloadButton
+                      entry={entry}
+                      onDownloaded={(id, localUrl) =>
+                        setEntries((p) => p.map((e) => e.id === id ? { ...e, localUrl } : e))
+                      }
+                    />
                     <button
                       onClick={() => handleDelete(entry.id)}
                       style={{ padding: "4px 10px", background: "none", border: "1px solid #1e1e1e", borderRadius: 6, color: "#333", fontFamily: "'DM Mono', monospace", fontSize: 11, cursor: "pointer", transition: "all 0.15s" }}
@@ -916,9 +919,9 @@ export default function App() {
   useEffect(() => { loadTags(); loadGalleryCount(); }, [loadTags, loadGalleryCount]);
 
   const handleAddReference = useCallback((imageUrl) => {
-    setReferenceImages((p) => [...p, { url: imageUrl, isUrl: true }]);
-    setPage("generate");
-  }, [setReferenceImages]);
+  setReferenceImages((p) => [...p, { src: imageUrl, isUrl: true, purpose: "composition" }]);
+  setPage("generate");
+}, [setReferenceImages]);
   // Called after a successful generation — bumps the badge and
   // if gallery is open it will re-fetch on its own via its useEffect
   const handleGenerated = useCallback(() => {
@@ -932,7 +935,7 @@ export default function App() {
     // Restore reference images that were used
     setReferenceImages(
         entry.referenceImageUrls?.length
-            ? entry.referenceImageUrls.map(url => ({ url, isUrl: true }))
+            ? entry.referenceImageUrls.map(url => ({ src: url, isUrl: true, purpose: "composition" }))
             : []
     );
 
@@ -1035,69 +1038,177 @@ export default function App() {
   );
 }
 
+function UrlReferenceInput({ onAdd }) {
+  const [url, setUrl] = useState("");
+  const [error, setError] = useState(null);
+
+  const handleAdd = () => {
+    const trimmed = url.trim();
+    if (!trimmed) return;
+    try {
+      new URL(trimmed); // validates it's a real URL
+      onAdd(trimmed);
+      setUrl("");
+      setError(null);
+    } catch {
+      setError("Invalid URL");
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") { e.preventDefault(); handleAdd(); }
+    if (e.key === "Escape") { setUrl(""); setError(null); }
+  };
+
+  return (
+    <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+      <div style={{ flex: 1, position: "relative" }}>
+        <input
+          value={url}
+          onChange={(e) => { setUrl(e.target.value); setError(null); }}
+          onKeyDown={handleKeyDown}
+          placeholder="Paste image URL…"
+          style={{
+            ...FI,
+            borderColor: error ? "#ff3b3b44" : "#1e1e1e",
+            fontSize: 12,
+            padding: "8px 12px",
+          }}
+        />
+        {error && (
+          <div style={{ position: "absolute", top: "calc(100% + 3px)", left: 0, color: "#ff3b3b", fontFamily: "'DM Mono', monospace", fontSize: 10 }}>
+            {error}
+          </div>
+        )}
+      </div>
+      <button
+        onClick={handleAdd}
+        disabled={!url.trim()}
+        style={{
+          padding: "8px 14px", borderRadius: 7, border: "1px solid #1e1e1e",
+          background: url.trim() ? "#f0f0f0" : "transparent",
+          color: url.trim() ? "#000" : "#333",
+          fontFamily: "'DM Mono', monospace", fontSize: 12,
+          cursor: url.trim() ? "pointer" : "not-allowed",
+          transition: "all 0.15s", whiteSpace: "nowrap",
+        }}
+      >
+        + Add URL
+      </button>
+    </div>
+  );
+}
+
+const REFERENCE_PURPOSES = [
+  { value: "composition", label: "Composition", hint: "Framing, layout, subject placement" },
+  { value: "style",       label: "Style",       hint: "Lighting, color grade, film aesthetic" },
+  { value: "pose",        label: "Pose",        hint: "Body position, gesture, stance" },
+  { value: "scene",       label: "Scene",       hint: "Background, environment, setting" },
+  // { value: "wardrobe",    label: "Wardrobe",    hint: "Clothing, styling, accessories" },
+  // { value: "face",        label: "Face",        hint: "Facial features, makeup" },
+];
+
 function ReferenceImageInput({ images, onChange }) {
-    const inputRef = useRef();
-    const [dragging, setDragging] = useState(false);
+  const inputRef = useRef();
+  const [dragging, setDragging] = useState(false);
 
-    const addFiles = async (fileList) => {
-        const b64s = await Promise.all(Array.from(fileList).map(toBase64));
-        onChange((p) => [...p, ...b64s]);
-    };
+  const addFiles = async (fileList) => {
+    const srcs = await Promise.all(Array.from(fileList).map(toBase64));
+    onChange((p) => [...p, ...srcs.map(src => ({ src, isUrl: false, purpose: "composition" }))]);
+  };
 
-    const handleDrop = (e) => {
-        e.preventDefault();
-        setDragging(false);
-        if (e.dataTransfer.files?.length) addFiles(e.dataTransfer.files);
-    };
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragging(false);
+    if (e.dataTransfer.files?.length) addFiles(e.dataTransfer.files);
+  };
 
-    // Get display src regardless of whether item is base64 string or {url} object
-    const getSrc = (item) => typeof item === "string" ? item : item.url;
+  const updatePurpose = (i, purpose) => {
+    onChange((p) => p.map((item, j) => j === i ? { ...item, purpose } : item));
+  };
 
-    return (
-        <div>
-            <div
-                onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-                onDragLeave={() => setDragging(false)}
-                onDrop={handleDrop}
-                onClick={() => inputRef.current?.click()}
-                style={{
-                    border: `1px dashed ${dragging ? "#888" : "#2a2a2a"}`,
-                    borderRadius: 8,
-                    padding: "12px 16px",
-                    cursor: "pointer",
-                    background: dragging ? "#111" : "transparent",
-                    transition: "all 0.15s",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    color: "#333",
-                    fontFamily: "'DM Mono', monospace",
-                    fontSize: 12,
-                    marginBottom: images.length > 0 ? 8 : 0,
-                }}
-            >
-                <span style={{ fontSize: 18 }}>+</span>
-                <span>Drop images here or click to add reference photos</span>
-                <input ref={inputRef} type="file" accept="image/*" multiple style={{ display: "none" }}
-                    onChange={(e) => addFiles(e.target.files)} />
-            </div>
-            {images.length > 0 && (
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {images.map((item, i) => (
-                        <div key={i} style={{ position: "relative", width: 72, height: 72, borderRadius: 7, overflow: "hidden", border: "1px solid #1a1a1a", flexShrink: 0 }}>
-                            <img src={getSrc(item)} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                            {typeof item !== "string" && (
-                                // URL items show a small indicator that they're restored
-                                <div style={{ position: "absolute", bottom: 2, left: 2, background: "rgba(0,0,0,0.7)", borderRadius: 3, padding: "1px 4px", color: "#888", fontFamily: "'DM Mono', monospace", fontSize: 9 }}>ref</div>
-                            )}
-                            <button
-                                onClick={(e) => { e.stopPropagation(); onChange((p) => p.filter((_, j) => j !== i)); }}
-                                style={{ position: "absolute", top: 3, right: 3, width: 18, height: 18, borderRadius: "50%", background: "rgba(0,0,0,0.85)", border: "none", color: "#fff", fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
-                            >×</button>
-                        </div>
-                    ))}
+  const remove = (i) => {
+    onChange((p) => p.filter((_, j) => j !== i));
+  };
+
+  return (
+    <div>
+      {/* Drop zone */}
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={handleDrop}
+        onClick={() => inputRef.current?.click()}
+        style={{
+          border: `1px dashed ${dragging ? "#888" : "#2a2a2a"}`,
+          borderRadius: 8, padding: "12px 16px", cursor: "pointer",
+          background: dragging ? "#111" : "transparent",
+          transition: "all 0.15s", display: "flex", alignItems: "center",
+          gap: 10, color: "#333", fontFamily: "'DM Mono', monospace", fontSize: 12,
+          marginBottom: images.length > 0 ? 10 : 0,
+        }}
+      >
+        <span style={{ fontSize: 18 }}>+</span>
+        <span>{dragging ? "Drop to add reference" : "Drop images or click to add reference photos"}</span>
+        <input ref={inputRef} type="file" accept="image/*" multiple style={{ display: "none" }}
+          onChange={(e) => addFiles(e.target.files)} />
+      </div>
+      <UrlReferenceInput onAdd={(url) => onChange((p) => [...p, { src: url, isUrl: true, purpose: "composition" }])} />
+
+      {/* Image list with purpose dropdowns */}
+      {images.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {images.map((item, i) => (
+            <div key={i} style={{
+              display: "flex", alignItems: "center", gap: 10,
+              background: "#0a0a0a", border: "1px solid #1a1a1a",
+              borderRadius: 8, padding: "8px 10px",
+            }}>
+              {/* Thumbnail */}
+              <div style={{ width: 52, height: 52, borderRadius: 6, overflow: "hidden", flexShrink: 0, border: "1px solid #1e1e1e", position: "relative" }}>
+                <img src={item.src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                {item.isUrl && (
+                  <div style={{ position: "absolute", bottom: 1, left: 1, background: "rgba(0,0,0,0.75)", borderRadius: 2, padding: "1px 3px", color: "#666", fontFamily: "'DM Mono', monospace", fontSize: 8 }}>ref</div>
+                )}
+              </div>
+
+              {/* Purpose selector */}
+              <div style={{ flex: 1 }}>
+                <div style={{ color: "#333", fontFamily: "'DM Mono', monospace", fontSize: 10, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                  Purpose
                 </div>
-            )}
+                <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                  {REFERENCE_PURPOSES.map((p) => (
+                    <button
+                      key={p.value}
+                      onClick={() => updatePurpose(i, p.value)}
+                      title={p.hint}
+                      style={{
+                        padding: "3px 10px", borderRadius: 5, fontSize: 11,
+                        fontFamily: "'DM Mono', monospace", cursor: "pointer",
+                        border: `1px solid ${item.purpose === p.value ? "#f0f0f0" : "#1e1e1e"}`,
+                        background: item.purpose === p.value ? "#f0f0f0" : "transparent",
+                        color: item.purpose === p.value ? "#000" : "#444",
+                        transition: "all 0.12s",
+                      }}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Remove */}
+              <button
+                onClick={() => remove(i)}
+                style={{ width: 22, height: 22, borderRadius: "50%", background: "none", border: "1px solid #1e1e1e", color: "#333", fontSize: 12, cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s" }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#ff3b3b44"; e.currentTarget.style.color = "#ff3b3b"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#1e1e1e"; e.currentTarget.style.color = "#333"; }}
+              >×</button>
+            </div>
+          ))}
         </div>
-    );
+      )}
+    </div>
+  );
 }
