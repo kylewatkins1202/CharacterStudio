@@ -14,6 +14,7 @@ import { colors, font, radius } from "../theme";
  * }} props
  */
 export function DownloadButton({ entry, onDownloaded }) {
+  // True while the download API call is in-flight
   const [downloading, setDownloading] = useState(false);
 
   if (entry.localUrl) {
@@ -33,10 +34,13 @@ export function DownloadButton({ entry, onDownloaded }) {
   }
 
   const handleDownload = async () => {
+    // Set in-flight state
     setDownloading(true);
     try {
+      // POST to the download endpoint to save the image to the local disk
       const res = await api.post(`/gallery/${entry.id}/download`);
       if (res.ok) {
+        // Pass the new local file URL up to the parent so the button switches to "✓ Saved"
         onDownloaded(entry.id, res.localUrl);
       } else {
         console.error("Download failed:", res.error);

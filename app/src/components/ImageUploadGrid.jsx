@@ -15,16 +15,22 @@ import { colors, font, radius } from "../theme";
  */
 export function ImageUploadGrid({ label, files, onAdd, onRemove }) {
   const inputRef = useRef();
+  // True while the user is dragging files over the grid
   const [dragging, setDragging] = useState(false);
 
   const addFiles = async (fileList) => {
+    // Convert each File to a base64 data URL in parallel
     const b64s = await Promise.all(Array.from(fileList).map(toBase64));
+    // Pass the base64 strings up to the parent
     onAdd(b64s);
   };
 
   const handleDrop = (e) => {
+    // Prevent the browser from opening the file
     e.preventDefault();
+    // Clear the drag-over highlight
     setDragging(false);
+    // Process dropped files if any were provided
     if (e.dataTransfer.files?.length) addFiles(e.dataTransfer.files);
   };
 

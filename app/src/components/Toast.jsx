@@ -10,15 +10,20 @@ import { colors, font, radius } from "../theme";
  * @returns {{ toasts: Array<{id: number, msg: string, type: string}>, add: Function, remove: Function }}
  */
 export function useToast() {
+  // Queue of active toast notifications
   const [toasts, setToasts] = useState([]);
 
   const add = useCallback((msg, type = "info") => {
+    // Unique ID using timestamp + random to avoid collisions on rapid adds
     const id = Date.now() + Math.random();
+    // Append the new toast to the queue
     setToasts((p) => [...p, { id, msg, type }]);
+    // Auto-dismiss after 3.5 seconds
     setTimeout(() => setToasts((p) => p.filter((t) => t.id !== id)), 3500);
   }, []);
 
   const remove = useCallback(
+    // Remove a single toast by id (used on click)
     (id) => setToasts((p) => p.filter((t) => t.id !== id)),
     []
   );

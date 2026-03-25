@@ -17,11 +17,16 @@ import { colors, font, radius, fieldLabel as FL } from "../theme";
  * }} props
  */
 export function TagDetail({ tag, onClose, onUpdated, onDeleted, toast }) {
+  // The asset group currently expanded for adding new images (null when closed)
   const [addingGroup,    setAddingGroup]    = useState(null);
+  // Staged base64 images before they are uploaded
   const [newImgs,        setNewImgs]        = useState([]);
+  // True while an upload or delete API call is in-flight
   const [saving,         setSaving]         = useState(false);
+  // True when the delete-confirmation dialog is shown
   const [confirmDelete,  setConfirmDelete]  = useState(false);
 
+  // Derive the relevant asset groups for this tag's type
   const groups =
     tag.type === "character" ? ["face", "body"] :
     tag.type === "prop"      ? ["prop"]          :
@@ -29,12 +34,16 @@ export function TagDetail({ tag, onClose, onUpdated, onDeleted, toast }) {
                                ["location"];
 
   const handleAddImages = async () => {
+    // Guard: nothing staged to upload
     if (!newImgs.length) return toast.add("Add some images first", "error");
+    // Set in-flight state
     setSaving(true);
     try {
+      // POST the staged images to the tag's image endpoint
       const res = await api.post(`/tags/${tag.key}/images`, { [addingGroup]: newImgs });
       if (res.ok) {
         toast.add("Images added!", "success");
+        // Propagate updated tag data to parent and close the upload section
         onUpdated(res.tag);
         setAddingGroup(null);
         setNewImgs([]);
@@ -49,6 +58,7 @@ export function TagDetail({ tag, onClose, onUpdated, onDeleted, toast }) {
 
   const handleDeleteImage = async (group, id) => {
     try {
+      // DELETE request with the specific group and image id
       const res = await api.delete(`/tags/${tag.key}/images`, { [group]: [id] });
       if (res.ok) { toast.add("Image removed", "success"); onUpdated(res.tag); }
       else toast.add(res.error || "Failed", "error");
@@ -59,6 +69,7 @@ export function TagDetail({ tag, onClose, onUpdated, onDeleted, toast }) {
 
   const handleDeleteTag = async () => {
     try {
+      // DELETE the entire tag by its key
       const res = await api.delete(`/tags/${tag.key}`);
       if (res.ok) { toast.add(`@${tag.key} deleted`, "success"); onDeleted(tag.key); }
       else toast.add(res.error || "Failed", "error");
