@@ -1,5 +1,9 @@
-require("dotenv").config();
+const path = require('path')
+const envPath = process.env.NODE_ENV === "production"
+  ? path.join(process.resourcesPath, ".env")
+  : path.join(__dirname, ".env");
 
+require("dotenv").config({ path: envPath });
 const crypto = require("crypto");
 const express = require("express");
 const cors = require("cors");
@@ -301,6 +305,7 @@ api.post("/generate", async (req, res) => {
     const tagLocks = req.body.tagLocks || {};
     const enableSyncMode = req.body.enable_sync_mode !== false;
     const enableBase64Output = req.body.enable_base64_output === true;
+    const rawReferenceImages = Array.isArray(req.body.referenceImages) ? req.body.referenceImages : [];
 
     if (!prompt) return res.status(400).json({ error: "prompt is required" });
 
@@ -324,12 +329,34 @@ api.post("/generate", async (req, res) => {
       }
     }
 
+    // Upload any raw base64 reference images and get their URLs
+    const uploadedReferenceUrls = await Promise.all(
+        rawReferenceImages.map(async (b64, i) => {
+            const parsed = parseBase64Image(b64);
+            const filename = `ref-${Date.now()}-${i}.${parsed.ext}`;
+            const uploaded = await uploadBufferToWaveSpeed(parsed.buffer, filename, parsed.mimeType);
+            return uploaded.url;
+        })
+    );
+
+    // Reference images go FIRST so their indices are predictable
+    const allImages = [...uploadedReferenceUrls, ...(compiled?.images ?? [])];
+
+    // If there are reference images, prepend a directive to the prompt
+    let finalPrompt = compiled?.rawPrompt ?? prompt;
+    if (uploadedReferenceUrls.length > 0) {
+        const refDirectives = uploadedReferenceUrls
+            .map((_, i) => `Use image[${i + 1}] as a visual reference for the overall scene style and composition.`)
+            .join("\n");
+        finalPrompt = `${finalPrompt}\n\n${refDirectives}`;
+    }
+
     const result = await generateSeedreamEdit({
-      images: compiled?.images ?? [],
-      prompt: compiled?.rawPrompt ?? prompt,
-      size,
-      enableSyncMode,
-      enableBase64Output
+        images: allImages,
+        prompt: finalPrompt,
+        size,
+        enableSyncMode,
+        enableBase64Output
     });
 
     // Persist to gallery
@@ -340,6 +367,8 @@ api.post("/generate", async (req, res) => {
         imageUrl,
         userPrompt: prompt,
         compiledPrompt: compiled?.rawPrompt || null,
+        compiledImages: compiled?.images || [],
+        referenceImageUrls: uploadedReferenceUrls,
         size: size || null,
         cost: estimateCost(size),
         timestamp: new Date().toISOString(),

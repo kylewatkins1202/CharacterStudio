@@ -1,15 +1,60 @@
 {
   "name": "imagegenerator",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "electron.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js",
+  "start": "node server.js",
     "dev:server": "node --watch server.js",
     "dev:client": "npm run dev --prefix app",
-    "dev": "concurrently -n SERVER,CLIENT -c yellow,cyan \"npm run dev:server\" \"npm run dev:client\"",
-    "lint": "eslint",
-    "lintFix": "eslint --fix"
+    "dev:electron": "cross-env NODE_ENV=development .\\node_modules\\.bin\\electron .",
+    "dev:wait-electron": "wait-on http://localhost:5173 && npm run dev:electron",
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\" \"npm run dev:wait-electron\"",
+    "predist": "npm run build && .\\node_modules\\.bin\\electron-rebuild -f -w sharp",
+    "dist": "electron-builder"
+  },
+  "build": {
+    "appId": "com.character.studio",
+    "productName": "Character Studio",
+    "npmRebuild": true,
+    "electronVersion": "latest",
+    "files": [
+      "electron.js",
+      "server.js",
+      "server/**/*",
+      "app/dist/**/*",
+      "node_modules/**/*",
+      "!node_modules/.cache"
+    ],
+    "extraResources": [
+      {
+        "from": ".env",
+        "to": ".env"
+      },
+      {
+        "from": "server/data",
+        "to": "data",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.graphics-design",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ]
+    }
   },
   "author": "",
   "license": "ISC",
@@ -22,5 +67,12 @@
     "express": "^5.2.1",
     "form-data": "^4.0.5",
     "sharp": "^0.34.5"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "electron": "^41.0.3",
+    "electron-builder": "^26.8.1",
+    "wait-on": "^9.0.4"
   }
 }

@@ -1,7 +1,13 @@
 const fs = require("fs/promises")
 const path = require("path")
+const { app } = (() => {
+  try { return require("electron"); }
+  catch { return { app: null }; }
+})();
 
-const DATA_DIR = path.join(__dirname, "data")
+const DATA_DIR = app
+  ? path.join(app.getPath("userData"), "data")  // ~/Library/Application Support/Seedream Studio/data
+  : path.join(__dirname, "data");                // normal node, use local
 const TAG_DB_PATH = path.join(DATA_DIR, "tags.json")
 const GALLERY_DB_PATH = path.join(DATA_DIR, "gallery.json")
 
@@ -55,6 +61,8 @@ async function writeGallery(data) {
  *   imageUrl: string,
  *   userPrompt: string,
  *   compiledPrompt: string|null,
+ *   compiledImages: string[],
+ *   referenceImageUrls: uploadedReferenceUrls,
  *   size: string,
  *   cost: string|null,
  *   timestamp: string
