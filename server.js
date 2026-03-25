@@ -8,7 +8,7 @@ require("dotenv").config({ path: envPath });
 const crypto = require("crypto");
 const express = require("express");
 const cors = require("cors");
-const { ensureDb, getTag, saveTag, getTags, searchTags, updateTag, readDb, writeDb, saveGalleryEntry, getGalleryEntries, deleteGalleryEntry, DOWNLOADS_DIR } = require("./server/db");
+const db = require("./server/db");
 const { uploadBufferToWaveSpeed, generateSeedreamEdit } = require("./server/wavespeed");
 const { sanitizeTagKey, parseBase64Image } = require("./server/imageCollage");
 const {
@@ -67,59 +67,6 @@ function serializeTag(tag) {
   };
 }
 
-// ─── Persistent prompt compile cache ──────────────────────────────────────────
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
-const CACHE_PATH = path.join(__dirname, "server", "data", "prompt_cache.json");
-
-async function readCache() {
-  try {
-    const raw = await fs.readFile(CACHE_PATH, "utf8");
-    return JSON.parse(raw);
-  } catch {
-    return {};
-  }
-}
-
-async function writeCache(cache) {
-  try {
-    await fs.writeFile(CACHE_PATH, JSON.stringify(cache, null, 2), "utf8");
-  } catch (err) {
-    console.error("Failed to write prompt cache:", err.message);
-  }
-}
-
-function makeCacheKey(prompt, tagLocks, tags) {
-  const tagStamps = tags.map((t) => `${t.key}:${t.meta?.updatedAt || ""}`).join(",");
-  const raw = JSON.stringify({ prompt, tagLocks: tagLocks || {}, tagStamps });
-  return crypto.createHash("sha256").update(raw).digest("hex");
-}
-
-async function getCached(key) {
-  const cache = await readCache();
-  const entry = cache[key];
-  if (!entry) return null;
-  if (Date.now() - entry.timestamp > CACHE_TTL_MS) {
-    // Expired — clean it up
-    delete cache[key];
-    await writeCache(cache);
-    return null;
-  }
-  return entry.value;
-}
-
-async function setCached(key, value) {
-  const cache = await readCache();
-  cache[key] = { value, timestamp: Date.now() };
-  await writeCache(cache);
-}
-
-async function deleteCached(key) {
-  const cache = await readCache();
-  if (cache[key]) {
-    delete cache[key];
-    await writeCache(cache);
-  }
-}
 
 function createStoredAsset({ uploaded, filename, mimeType, buffer, source = "base64" }) {
   return {
@@ -156,7 +103,7 @@ api.get("/health", async (req, res) => {
 });
 
 
-api.use("/downloads", express.static(DOWNLOADS_DIR));
+api.use("/downloads", express.static(db.DOWNLOADS_DIR));
 
 // ── Tags ──────────────────────────────────────────────────────────────────────
 
@@ -168,7 +115,7 @@ api.post("/tag", async (req, res) => {
     if (!key) return res.status(400).json({ error: "key is required" });
     if (!TAG_TYPES.includes(type)) return res.status(400).json({ error: `type must be one of: ${TAG_TYPES.join(", ")}` });
 
-    const existingTag = await getTag(key);
+    const existingTag = await db.tags.getTag(key);
     const tag = buildTagRecord({ key, type, existingTag });
     tag.lock = mergeTagLockDescriptions(tag, req.body);
 
@@ -186,7 +133,7 @@ api.post("/tag", async (req, res) => {
     const now = new Date().toISOString();
     if (!tag.meta.createdAt) tag.meta.createdAt = now;
     tag.meta.updatedAt = now;
-    await saveTag(tag);
+    await db.tags.saveTag(tag);
 
     res.json({ ok: true, tag: serializeTag(tag) });
   } catch (error) {
@@ -196,8 +143,8 @@ api.post("/tag", async (req, res) => {
 
 api.get("/tags", async (req, res) => {
   try {
-    const tags = await searchTags(String(req.query.key || "").trim());
-    res.json({ ok: true, count: tags.length, tags: tags.map(serializeTag) });
+    const tagList = await db.tags.searchTags(String(req.query.key || "").trim());
+    res.json({ ok: true, count: tagList.length, tags: tagList.map(serializeTag) });
   } catch (error) {
     res.status(500).json({ error: "failed to fetch tags", details: error.message });
   }
@@ -205,7 +152,7 @@ api.get("/tags", async (req, res) => {
 
 api.get("/tags/:key", async (req, res) => {
   try {
-    const tag = await getTag(sanitizeTagKey(req.params.key));
+    const tag = await db.tags.getTag(sanitizeTagKey(req.params.key));
     if (!tag) return res.status(404).json({ error: `tag not found: ${req.params.key}` });
     res.json({ ok: true, tag: serializeTag(tag) });
   } catch (error) {
@@ -216,9 +163,9 @@ api.get("/tags/:key", async (req, res) => {
 api.post("/tags/:key/images", async (req, res) => {
   try {
     const key = sanitizeTagKey(req.params.key);
-    if (!await getTag(key)) return res.status(404).json({ error: `tag not found: ${key}` });
+    if (!await db.tags.getTag(key)) return res.status(404).json({ error: `tag not found: ${key}` });
 
-    const updated = await updateTag(key, async (tag) => {
+    const updated = await db.tags.updateTag(key, async (tag) => {
       for (const group of ASSET_GROUPS) {
         const rawImages = Array.isArray(req.body[group]) ? req.body[group] : [];
         for (let index = 0; index < rawImages.length; index += 1) {
@@ -242,12 +189,12 @@ api.post("/tags/:key/images", async (req, res) => {
 api.delete("/tags/:key/images", async (req, res) => {
   try {
     const key = sanitizeTagKey(req.params.key);
-    if (!await getTag(key)) return res.status(404).json({ error: `tag not found: ${key}` });
+    if (!await db.tags.getTag(key)) return res.status(404).json({ error: `tag not found: ${key}` });
 
     const deleted = {};
     let totalDeleted = 0;
 
-    const updated = await updateTag(key, async (tag) => {
+    const updated = await db.tags.updateTag(key, async (tag) => {
       for (const group of ASSET_GROUPS) {
         const idsToDelete = new Set(Array.isArray(req.body[group]) ? req.body[group].map(String) : []);
         if (!idsToDelete.size) continue;
@@ -271,10 +218,10 @@ api.delete("/tags/:key/images", async (req, res) => {
 api.delete("/tags/:key", async (req, res) => {
   try {
     const key = sanitizeTagKey(req.params.key);
-    const db = await readDb();
-    if (!db.tags[key]) return res.status(404).json({ error: `tag not found: ${key}` });
-    delete db.tags[key];
-    await writeDb(db);
+    const dbTags = await db.tags.read();
+    if (!dbTags.tags[key]) return res.status(404).json({ error: `tag not found: ${key}` });
+    delete dbTags.tags[key];
+    await db.tags.write(dbTags);
     res.json({ ok: true, deleted: key });
   } catch (error) {
     res.status(500).json({ error: "failed to delete tag", details: error.message });
@@ -289,7 +236,7 @@ api.delete("/tags/:key", async (req, res) => {
  */
 api.get("/gallery", async (req, res) => {
   try {
-    const entries = await getGalleryEntries();
+    const entries = await db.gallery.getGalleryEntries();
     res.json({ ok: true, count: entries.length, entries });
   } catch (error) {
     res.status(500).json({ error: "failed to fetch gallery", details: error.message });
@@ -302,7 +249,7 @@ api.get("/gallery", async (req, res) => {
  */
 api.delete("/gallery/:id", async (req, res) => {
   try {
-    const deleted = await deleteGalleryEntry(req.params.id);
+    const deleted = await db.gallery.deleteGalleryEntry(req.params.id);
     if (!deleted) return res.status(404).json({ error: `entry not found: ${req.params.id}` });
     res.json({ ok: true, deleted: req.params.id });
   } catch (error) {
@@ -316,8 +263,7 @@ api.delete("/gallery/:id", async (req, res) => {
  */
 api.patch("/gallery/:id", async (req, res) => {
   try {
-    const { readGallery, writeGallery } = require("./server/db");
-    const data = await readGallery();
+    const data = await db.gallery.read();
     const idx = data.entries.findIndex((e) => e.id === req.params.id);
     if (idx === -1) return res.status(404).json({ error: `entry not found: ${req.params.id}` });
 
@@ -329,7 +275,7 @@ api.patch("/gallery/:id", async (req, res) => {
       }
     }
 
-    await writeGallery(data);
+    await db.gallery.write(data);
     res.json({ ok: true, entry: data.entries[idx] });
   } catch (error) {
     res.status(500).json({ error: "failed to update gallery entry", details: error.message });
@@ -342,7 +288,7 @@ api.patch("/gallery/:id", async (req, res) => {
  */
 api.post("/gallery/:id/download", async (req, res) => {
   try {
-    const entries = await getGalleryEntries();
+    const entries = await db.gallery.getGalleryEntries();
     const entry = entries.find((e) => e.id === req.params.id);
 
     if (!entry) {
@@ -367,19 +313,18 @@ api.post("/gallery/:id/download", async (req, res) => {
     const contentType = response.headers.get("content-type") || "image/jpeg";
     const ext = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
     const filename = `${entry.id}.${ext}`;
-    const localPath = path.join(DOWNLOADS_DIR, filename);
+    const localPath = path.join(db.DOWNLOADS_DIR, filename);
 
     // Write to disk
     await fs.writeFile(localPath, buffer);
 
     // Update the gallery entry with the local path
-    const { readGallery, writeGallery } = require("./server/db");
-    const data = await readGallery();
+    const data = await db.gallery.read();
     const idx = data.entries.findIndex((e) => e.id === req.params.id);
     if (idx !== -1) {
       data.entries[idx].localPath = localPath;
       data.entries[idx].localUrl = `/api/downloads/${filename}`;
-      await writeGallery(data);
+      await db.gallery.write(data);
     }
 
     res.json({ ok: true, localUrl: `/api/downloads/${filename}` });
@@ -396,10 +341,10 @@ api.post("/compile", async (req, res) => {
     if (!prompt) return res.status(400).json({ error: "prompt is required" });
 
     const tagKeys = extractTags(prompt);
-    const tags = await getTags(tagKeys);
+    const tagList = await db.tags.getTags(tagKeys);
 
     const compiled = await compilePrompt({
-      prompt, tags,
+      prompt, tags: tagList,
       tagLocks: req.body.tagLocks || {},
       parserOptions: { model: LLM_MODEL },
       visionOptions: { enable: true, force: false, model: VISION_MODEL }
@@ -425,29 +370,29 @@ api.post("/generate", async (req, res) => {
     if (!prompt) return res.status(400).json({ error: "prompt is required" });
 
     const tagKeys = extractTags(prompt);
-    const tags = await getTags(tagKeys);
+    const tagList = await db.tags.getTags(tagKeys);
 
     let compiled;
 
-    if (tags.length > 0) {
-      const cacheKey = makeCacheKey(prompt, tagLocks, tags);
+    if (tagList.length > 0) {
+      const cacheKey = db.cache.makeCacheKey(prompt, tagLocks, tagList);
 
       if (resetCache) {
-        await deleteCached(cacheKey);
+        await db.cache.deleteCached(cacheKey);
         console.log(`[cache reset] ${cacheKey.slice(0, 12)}…`);
       }
 
-      compiled = await getCached(cacheKey);
+      compiled = await db.cache.getCached(cacheKey);
 
       if (compiled) {
         console.log(`[cache hit] ${cacheKey.slice(0, 12)}…`);
       } else {
         compiled = await compilePrompt({
-          prompt, tags, tagLocks,
+          prompt, tags: tagList, tagLocks,
           parserOptions: { model: LLM_MODEL },
           visionOptions: { enable: false, force: false, model: VISION_MODEL }
         });
-        await setCached(cacheKey, compiled);
+        await db.cache.setCached(cacheKey, compiled);
       }
     }
 
@@ -511,7 +456,7 @@ api.post("/generate", async (req, res) => {
 
     // All reference items
     if (allReferenceItems.length > 0) {
-      const characterCount = (compiled?.parsedPlan?.characters ?? tags.filter(t => t.type === "character")).length;
+      const characterCount = (compiled?.parsedPlan?.characters ?? tagList.filter(t => t.type === "character")).length;
       const isPlural = characterCount > 1;
       const baseIndex = (compiled?.images ?? []).length;
 
@@ -540,7 +485,7 @@ api.post("/generate", async (req, res) => {
     // Persist to gallery
     const imageUrl = extractImageUrlFromResult(result);
     if (imageUrl) {
-      await saveGalleryEntry({
+      await db.gallery.saveGalleryEntry({
         id: crypto.randomUUID(),
         imageUrl,
         userPrompt: prompt,
@@ -566,7 +511,7 @@ api.post("/generate", async (req, res) => {
 
 app.use("/api", api);
 
-ensureDb()
+db.setupDb()
   .then(() => {
     app.listen(PORT, () => {
       console.log(`\n  🎨  Seedream Studio`);
