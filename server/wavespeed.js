@@ -1,3 +1,19 @@
+/**
+ * wavespeed.js
+ *
+ * Thin client around the WaveSpeed v3 API.
+ * Exposes helpers for:
+ * - Uploading raw image buffers to WaveSpeed media storage
+ * - Calling the Seedream image-generation / edit endpoint
+ * - Calling the Any LLM (text) and Any LLM Vision endpoints
+ * - Extracting the text payload from a WaveSpeed LLM response
+ */
+
+/** @typedef {import('./types').WaveSpeedUploadResult} WaveSpeedUploadResult */
+/** @typedef {import('./types').SeedreamEditOptions} SeedreamEditOptions */
+/** @typedef {import('./types').AnyLLMOptions} AnyLLMOptions */
+/** @typedef {import('./types').AnyLLMVisionOptions} AnyLLMVisionOptions */
+
 const axios = require("axios")
 const FormData = require("form-data")
 
@@ -14,6 +30,12 @@ if (!WAVESPEED_API_KEY) {
     console.warn("Warning: WAVESPEED_API_KEY is not set.")
 }
 
+/**
+ * Build the standard Authorization header merged with any extra headers.
+ *
+ * @param {Record<string, string>} [extra={}] - Additional headers to merge in (e.g. Content-Type or form-data headers).
+ * @returns {Record<string, string>}
+ */
 function getAuthHeaders(extra = {}) {
     return {
         Authorization: `Bearer ${WAVESPEED_API_KEY}`,
@@ -21,6 +43,17 @@ function getAuthHeaders(extra = {}) {
     }
 }
 
+/**
+ * Upload a raw image buffer to WaveSpeed media storage.
+ *
+ * The returned URL is a publicly accessible CDN link that can be passed
+ * directly to the Seedream or Any LLM Vision endpoints.
+ *
+ * @param {Buffer} buffer - Raw image data to upload.
+ * @param {string} filename - Suggested filename including extension (e.g. "photo.jpg").
+ * @param {string} mimeType - MIME type of the image (e.g. "image/jpeg").
+ * @returns {Promise<WaveSpeedUploadResult>}
+ */
 async function uploadBufferToWaveSpeed(buffer, filename, mimeType) {
     const form = new FormData()
 
@@ -50,6 +83,15 @@ async function uploadBufferToWaveSpeed(buffer, filename, mimeType) {
     }
 }
 
+/**
+ * Call the Seedream image-generation or sequential-edit endpoint.
+ *
+ * When `images` is empty the base generation URL is used (text-to-image).
+ * When `images` contains one or more URLs the edit-sequential URL is used instead.
+ *
+ * @param {SeedreamEditOptions} options
+ * @returns {Promise<unknown>} Raw WaveSpeed API response body.
+ */
 async function generateSeedreamEdit({
     images,
     prompt,
@@ -81,6 +123,9 @@ async function generateSeedreamEdit({
 
 /**
  * Generic Any LLM call for text-only parsing / compilation work.
+ *
+ * @param {AnyLLMOptions} options
+ * @returns {Promise<unknown>} Raw WaveSpeed API response body.
  */
 async function callAnyLLM({
     prompt,
@@ -119,7 +164,11 @@ async function callAnyLLM({
 
 /**
  * Vision-capable LLM call for analyzing one or more uploaded reference images.
+ *
  * `images` should be an array of publicly reachable URLs, typically WaveSpeed upload URLs.
+ *
+ * @param {AnyLLMVisionOptions} options
+ * @returns {Promise<unknown>} Raw WaveSpeed API response body.
  */
 async function callAnyLLMVision({
     prompt,
@@ -159,8 +208,13 @@ async function callAnyLLMVision({
 }
 
 /**
- * Best-effort extraction of the final text from a WaveSpeed Any LLM / Vision response.
- * This keeps tagCompiler.js simpler.
+ * Best-effort extraction of the final text string from a WaveSpeed Any LLM / Vision response.
+ *
+ * Tries several known response shapes in order and returns the first non-empty string found.
+ * Returns an empty string if nothing can be extracted. This keeps tagCompiler.js simpler.
+ *
+ * @param {unknown} result - Raw response body returned by callAnyLLM or callAnyLLMVision.
+ * @returns {string}
  */
 function extractLLMText(result) {
     if (!result) {

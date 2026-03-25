@@ -12,6 +12,25 @@
  *   - an ordered images[] array
  */
 
+/** @typedef {import('./types').Tag} Tag */
+/** @typedef {import('./types').TagAsset} TagAsset */
+/** @typedef {import('./types').TagAssets} TagAssets */
+/** @typedef {import('./types').TagLock} TagLock */
+/** @typedef {import('./types').TagType} TagType */
+/** @typedef {import('./types').AssetGroup} AssetGroup */
+/** @typedef {import('./types').TagSummary} TagSummary */
+/** @typedef {import('./types').ParsedPlan} ParsedPlan */
+/** @typedef {import('./types').PlanCharacter} PlanCharacter */
+/** @typedef {import('./types').PlanProp} PlanProp */
+/** @typedef {import('./types').PlanOutfit} PlanOutfit */
+/** @typedef {import('./types').PlanLocation} PlanLocation */
+/** @typedef {import('./types').CharacterPosition} CharacterPosition */
+/** @typedef {import('./types').RelativePosition} RelativePosition */
+/** @typedef {import('./types').LLMOptions} LLMOptions */
+/** @typedef {import('./types').VisionEnrichOptions} VisionEnrichOptions */
+/** @typedef {import('./types').BuildRawPromptResult} BuildRawPromptResult */
+/** @typedef {import('./types').CompileResult} CompileResult */
+
 const crypto = require("crypto")
 const { createImageGridFromBuffers, assetUrls } = require("./imageCollage")
 const {
@@ -118,13 +137,7 @@ const SUPPORT_VALUES = [
 /**
  * Create an empty assets object for a tag.
  *
- * @returns {{
- *   face: any[],
- *   body: any[],
- *   prop: any[],
- *   outfit: any[],
- *   location: any[]
- * }}
+ * @returns {TagAssets}
  */
 function createEmptyAssets() {
     return {
@@ -139,12 +152,8 @@ function createEmptyAssets() {
 /**
  * Create default lock-description fields based on tag type.
  *
- * @param {string} type
- * @returns {{
- *   basicDescription?: string,
- *   appearanceDescription?: string,
- *   bodyDescription?: string
- * }}
+ * @param {TagType} type
+ * @returns {TagLock}
  */
 function createDefaultLocks(type) {
     if (type === "character") {
@@ -163,12 +172,11 @@ function createDefaultLocks(type) {
 /**
  * Build or normalize a tag record into the expected shape.
  *
- * @param {{
- *   key: string,
- *   type: string,
- *   existingTag?: any
- * }} params
- * @returns {any}
+ * If `existingTag` is provided it is mutated in place with any missing fields
+ * filled in from defaults. Otherwise a brand-new tag record is created.
+ *
+ * @param {{ key: string, type: TagType, existingTag?: Tag }} params
+ * @returns {Tag}
  */
 function buildTagRecord({ key, type, existingTag }) {
     const base = existingTag || {
@@ -211,7 +219,7 @@ function extractTags(prompt) {
 /**
  * Count the total number of images referenced across all tag asset groups.
  *
- * @param {any[]} tags
+ * @param {Tag[]} tags
  * @returns {number}
  */
 function countTagImages(tags) {
@@ -242,13 +250,13 @@ function stableFilename(prefix, suffix = "jpg") {
  * Collapse multiple images in a single asset group into one uploaded collage image.
  * If there is only one image already, it is returned unchanged.
  *
- * Important:
- * This expects each asset to carry a `buffer` field locally so we can build a collage.
+ * Each asset must have a `url` field so the original images can be fetched
+ * and composed into a grid before uploading to WaveSpeed.
  *
- * @param {string} tagKey
- * @param {string} groupName
- * @param {Array<{buffer?: Buffer, url?: string}>} assets
- * @returns {Promise<any[]>}
+ * @param {string} tagKey - Tag key, used for naming the collage file.
+ * @param {string} groupName - Asset group name, used for naming the collage file.
+ * @param {TagAsset[]} assets
+ * @returns {Promise<TagAsset[]>}
  */
 async function collapseAssetGroupToSingleUpload(tagKey, groupName, assets) {
     if (!Array.isArray(assets) || assets.length === 0) {
@@ -282,7 +290,8 @@ async function collapseAssetGroupToSingleUpload(tagKey, groupName, assets) {
 }
 
 /**
- * If total images exceed the model max, collapse each tag's image groups.
+ * If total images across all tags exceed MODEL_MAX_IMAGES, collapse each
+ * tag's asset groups down to a single collage image per group.
  *
  * Collapse strategy:
  * - character: face group -> 1 image, body group -> 1 image
@@ -290,8 +299,8 @@ async function collapseAssetGroupToSingleUpload(tagKey, groupName, assets) {
  * - outfit: outfit group -> 1 image
  * - location: location group -> 1 image
  *
- * @param {any[]} tags
- * @returns {Promise<any[]>}
+ * @param {Tag[]} tags
+ * @returns {Promise<Tag[]>}
  */
 async function collapseTagsIfNeeded(tags) {
     const total = countTagImages(tags)
@@ -329,10 +338,12 @@ async function collapseTagsIfNeeded(tags) {
 
 /**
  * Produce a lightweight summary of a tag for the planning LLM.
- * This avoids sending all asset URLs and unnecessary noise.
  *
- * @param {any} tag
- * @returns {any}
+ * Strips asset URLs and replaces them with counts, avoiding unnecessary
+ * token usage while still giving the LLM enough context to plan.
+ *
+ * @param {Tag} tag
+ * @returns {TagSummary}
  */
 function getTagSummary(tag) {
     return {
@@ -392,7 +403,10 @@ function parseJsonFromLLMText(text) {
 /**
  * Normalize enum-like values against an allowed list.
  *
- * @param {any} value
+ * Returns the normalized string if it matches an entry in `allowed`,
+ * otherwise returns null. Empty values and undefined also return null.
+ *
+ * @param {unknown} value
  * @param {Array<string|null>} allowed
  * @returns {string|null}
  */
@@ -405,9 +419,9 @@ function cleanEnum(value, allowed) {
 }
 
 /**
- * Normalize a string field.
+ * Coerce a value to a trimmed string; returns "" for non-string inputs.
  *
- * @param {any} value
+ * @param {unknown} value
  * @returns {string}
  */
 function cleanString(value) {
@@ -417,9 +431,12 @@ function cleanString(value) {
 /**
  * Normalize a relative-position object and discard invalid targets.
  *
- * @param {any} value
- * @param {Set<string>} knownTags
- * @returns {{relation: string, targetTag: string|null, targetTags: string[]}|null}
+ * Validates the relation enum and filters targetTag / targetTags so only
+ * keys present in `knownTags` survive. Returns null if the relation is invalid.
+ *
+ * @param {unknown} value
+ * @param {Set<string>} knownTags - Set of valid tag keys in the current request.
+ * @returns {RelativePosition|null}
  */
 function cleanRelativePosition(value, knownTags) {
     if (!value || typeof value !== "object") {
@@ -553,18 +570,20 @@ function buildRepairJsonSystemPrompt() {
 }
 
 /**
- * Ask the LLM to repair invalid JSON once.
+ * Parse plan JSON from the LLM text, retrying once with a repair call on failure.
  *
- * This is a fallback used when the initial planner response is malformed.
+ * On the first parse failure, sends the bad response back to the LLM with a
+ * repair system prompt asking it to return valid JSON only. If the repaired
+ * response also fails to parse, a combined error is thrown.
  *
  * @param {{
  *   initialText: string,
  *   originalPrompt: string,
- *   tagSummaries: any[],
- *   tagLocks: any,
- *   llmOptions?: any
+ *   tagSummaries: TagSummary[],
+ *   tagLocks: Record<string, unknown>,
+ *   llmOptions?: LLMOptions
  * }} params
- * @returns {Promise<any>}
+ * @returns {Promise<unknown>} Parsed JSON object (pre-normalization).
  */
 async function parsePromptPlanJsonWithRetry({
     initialText,
@@ -624,15 +643,14 @@ async function parsePromptPlanJsonWithRetry({
 /**
  * Normalize the raw parsed plan from the LLM into a validated internal shape.
  *
- * It:
- * - drops unknown tags
- * - validates enum fields
- * - applies explicit tagLocks from the request as overrides
+ * - Drops characters / props / outfits / locations whose tag keys are not in `availableTags`
+ * - Validates all enum fields against the allowed value lists (invalid values become null)
+ * - Applies explicit `requestedTagLocks` from the request as overrides over LLM choices
  *
- * @param {any} plan
- * @param {Record<string, any>} availableTags
- * @param {Record<string, any>} [requestedTagLocks={}]
- * @returns {any}
+ * @param {unknown} plan - Raw JSON object returned by the LLM.
+ * @param {Record<string, Tag>} availableTags - Tag records keyed by tag key.
+ * @param {Record<string, unknown>} [requestedTagLocks={}]
+ * @returns {ParsedPlan}
  */
 function normalizeParsedPlan(plan, availableTags, requestedTagLocks = {}) {
     const safePlan = {
@@ -737,18 +755,19 @@ function normalizeParsedPlan(plan, availableTags, requestedTagLocks = {}) {
 }
 
 /**
- * Ask the text LLM to parse the prompt into structured planning JSON.
+ * Ask the text LLM to parse the prompt into a validated ParsedPlan.
  *
- * This function now includes a one-time retry repair flow if the first LLM
- * response is not valid JSON.
+ * Sends the user prompt, tag summaries, and requested lock overrides to the
+ * planning LLM, then normalizes and validates the response. Includes a
+ * one-time JSON repair retry if the first response is malformed.
  *
  * @param {{
  *   prompt: string,
- *   tags: any[],
- *   tagLocks?: any,
- *   llmOptions?: any
+ *   tags: Tag[],
+ *   tagLocks?: Record<string, unknown>,
+ *   llmOptions?: LLMOptions
  * }} params
- * @returns {Promise<any>}
+ * @returns {Promise<ParsedPlan>}
  */
 async function parsePromptWithLLM({ prompt, tags, tagLocks = {}, llmOptions = {} }) {
     const availableTags = Object.fromEntries(tags.map((tag) => [tag.key, tag]))
@@ -848,22 +867,17 @@ function buildBasicVisionPrompt(tagType) {
 /**
  * Optionally enrich tags with vision-generated lock descriptions.
  *
+ * For each tag, calls the vision LLM on the relevant asset images if:
+ * - `options.enable` is true
+ * - the lock field is empty (or `options.force` is true to overwrite)
+ *
  * This is useful when:
  * - a character has face/body images but no saved descriptions yet
  * - a prop/location/outfit has images but no basic description yet
  *
- * @param {any[]} tags
- * @param {{
- *   enable?: boolean,
- *   force?: boolean,
- *   model?: string,
- *   temperature?: number,
- *   maxTokens?: number,
- *   reasoning?: boolean,
- *   priority?: string,
- *   enableSyncMode?: boolean
- * }} [options={}]
- * @returns {Promise<any[]>}
+ * @param {Tag[]} tags
+ * @param {VisionEnrichOptions} [options={}]
+ * @returns {Promise<Tag[]>}
  */
 async function enrichTagLocksWithVision(tags, options = {}) {
     const {
@@ -967,10 +981,10 @@ async function enrichTagLocksWithVision(tags, options = {}) {
 }
 
 /**
- * Get the face/body assets used for character image references.
+ * Get the face and body asset arrays from a character tag.
  *
- * @param {any} tag
- * @returns {{face: any[], body: any[]}}
+ * @param {Tag} tag
+ * @returns {{ face: TagAsset[], body: TagAsset[] }}
  */
 function getCharacterAssetsForPlan(tag) {
     return {
@@ -982,8 +996,11 @@ function getCharacterAssetsForPlan(tag) {
 /**
  * Get the single relevant asset group for a non-character tag.
  *
- * @param {any} tag
- * @returns {any[]}
+ * Returns `assets.prop`, `assets.outfit`, or `assets.location` depending
+ * on the tag type. Returns an empty array for unknown types.
+ *
+ * @param {Tag} tag
+ * @returns {TagAsset[]}
  */
 function getNonCharacterAssetsForPlan(tag) {
     if (tag.type === "prop") {
@@ -1002,10 +1019,10 @@ function getNonCharacterAssetsForPlan(tag) {
  * Build a human-readable phrase from structured position values.
  *
  * Example:
- * { depth: "foreground", horizontal: "center_right", vertical: "lower_middle" }
- * -> "foreground lower middle center right"
+ * `{ depth: "foreground", horizontal: "center_right", vertical: "lower_middle" }`
+ * -> `"foreground lower middle center right"`
  *
- * @param {{horizontal?: string|null, vertical?: string|null, depth?: string|null}} [position={}]
+ * @param {Partial<CharacterPosition>} [position={}]
  * @returns {string}
  */
 function buildPositionPhrase(position = {}) {
@@ -1027,7 +1044,7 @@ function buildPositionPhrase(position = {}) {
 /**
  * Build a human-readable relative-position phrase.
  *
- * @param {{relation?: string, targetTag?: string|null, targetTags?: string[]}|null} relativePosition
+ * @param {RelativePosition|null} relativePosition
  * @returns {string}
  */
 function buildRelativePositionPhrase(relativePosition) {
@@ -1064,15 +1081,13 @@ function buildRelativePositionPhrase(relativePosition) {
 }
 
 /**
- * Build a full scene sentence for a character using the structured fields.
+ * Build a full scene sentence for a character using the structured plan fields.
  *
- * This sentence is part of the final raw prompt and is intended to:
- * - anchor character placement
- * - include stance/facing/support
- * - include wardrobeDescription for text-described outfits
- * - include poseDescription
+ * This sentence is part of the final raw prompt and anchors character
+ * placement, wardrobe, and pose without duplicating appearance details
+ * (those go in the image-reference directives).
  *
- * @param {any} character
+ * @param {PlanCharacter} character
  * @returns {string}
  */
 function buildCharacterSceneSentence(character) {
@@ -1092,7 +1107,9 @@ function buildCharacterSceneSentence(character) {
 /**
  * Build a concise label used inside image-reference directives.
  *
- * @param {any} character
+ * Falls back to the tag key if no label is present.
+ *
+ * @param {PlanCharacter} character
  * @returns {string}
  */
 function buildCharacterDirectiveLabel(character) {
@@ -1102,17 +1119,18 @@ function buildCharacterDirectiveLabel(character) {
 /**
  * Deterministically build the final raw prompt and ordered images[] from the parsed plan.
  *
+ * Iterates through characters, props, outfits, and locations in plan order,
+ * assigns sequential image[N] indices to each asset URL, and produces the
+ * directive lines that bind those indices to their subjects.
+ *
+ * Throws if the total resolved image count exceeds MODEL_MAX_IMAGES.
+ *
  * @param {{
  *   originalPrompt: string,
- *   parsedPlan: any,
- *   tagMap: Record<string, any>
+ *   parsedPlan: ParsedPlan,
+ *   tagMap: Record<string, Tag>
  * }} params
- * @returns {{
- *   rawPrompt: string,
- *   images: string[],
- *   directives: string[],
- *   sceneLines: string[]
- * }}
+ * @returns {BuildRawPromptResult}
  */
 function buildRawPromptFromPlan({ originalPrompt, parsedPlan, tagMap }) {
     const images = []
@@ -1322,26 +1340,19 @@ function buildRawPromptFromPlan({ originalPrompt, parsedPlan, tagMap }) {
  * Main orchestration function used by /compile and /generate.
  *
  * Flow:
- * 1. Optionally enrich lock descriptions with vision
- * 2. Collapse tag assets if needed
- * 3. Ask the text LLM to build a structured plan
- * 4. Deterministically build the final raw prompt and image list
+ * 1. Optionally enrich lock descriptions with vision (enrichTagLocksWithVision)
+ * 2. Collapse tag assets if total image count exceeds model limit (collapseTagsIfNeeded)
+ * 3. Ask the text LLM to build a structured plan (parsePromptWithLLM)
+ * 4. Deterministically build the final raw prompt and image list (buildRawPromptFromPlan)
  *
  * @param {{
  *   prompt: string,
- *   tags: any[],
- *   tagLocks?: any,
- *   parserOptions?: any,
- *   visionOptions?: any
+ *   tags: Tag[],
+ *   tagLocks?: Record<string, unknown>,
+ *   parserOptions?: LLMOptions,
+ *   visionOptions?: VisionEnrichOptions
  * }} params
- * @returns {Promise<{
- *   parsedPlan: any,
- *   tagMap: Record<string, any>,
- *   rawPrompt: string,
- *   images: string[],
- *   directives: string[],
- *   sceneLines: string[]
- * }>}
+ * @returns {Promise<CompileResult>}
  */
 async function compilePrompt({
     prompt,

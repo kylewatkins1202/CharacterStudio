@@ -41,7 +41,15 @@
             "source": "base64"
           }
         ],
-        "body": [],
+        "body": [
+          {
+            "id": "6a363e1e-44ff-42d6-9a2f-0692cf7dc1a6",
+            "url": "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774432971975362244_G64dmvEO.jpg",
+            "filename": "jess-body-1774432985077-0.jpg",
+            "mimeType": "image/jpeg",
+            "source": "base64"
+          }
+        ],
         "prop": [],
         "outfit": [],
         "location": []
@@ -53,7 +61,7 @@
       },
       "meta": {
         "createdAt": "2026-03-20T02:59:24.042Z",
-        "updatedAt": "2026-03-20T13:53:39.765Z"
+        "updatedAt": "2026-03-25T10:03:05.334Z"
       }
     },
     "alba": {
@@ -181,7 +189,15 @@
             "source": "base64"
           }
         ],
-        "body": [],
+        "body": [
+          {
+            "id": "42ceaf79-b916-44af-b73b-f8e4a8834652",
+            "url": "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774428223527034627_5MEOV6fo.jpg",
+            "filename": "alba-pink-body-1774428236507-0.jpg",
+            "mimeType": "image/jpeg",
+            "source": "base64"
+          }
+        ],
         "prop": [],
         "outfit": [],
         "location": []
@@ -193,7 +209,79 @@
       },
       "meta": {
         "createdAt": "2026-03-20T23:02:49.600Z",
-        "updatedAt": "2026-03-20T23:02:49.600Z"
+        "updatedAt": "2026-03-25T08:43:56.846Z"
+      }
+    },
+    "chrissy": {
+      "key": "chrissy",
+      "type": "character",
+      "assets": {
+        "face": [
+          {
+            "id": "a6f034e1-7e98-4322-a2aa-531f1e9c062f",
+            "url": "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774427973867587147_oBnLfH46.jpg",
+            "filename": "chrissy-face-1774427983973-0.jpg",
+            "mimeType": "image/jpeg",
+            "source": "base64"
+          }
+        ],
+        "body": [
+          {
+            "id": "f1676e6c-53ff-4e25-b017-5e6a08f421f9",
+            "url": "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774426696075342688_fL08W5nE.jpg",
+            "filename": "chrissy-body-1774426708837-0.jpg",
+            "mimeType": "image/jpeg",
+            "source": "base64"
+          }
+        ],
+        "prop": [],
+        "outfit": [],
+        "location": []
+      },
+      "lock": {
+        "basicDescription": "",
+        "appearanceDescription": "",
+        "bodyDescription": ""
+      },
+      "meta": {
+        "createdAt": "2026-03-25T08:10:44.155Z",
+        "updatedAt": "2026-03-25T08:39:47.231Z"
+      }
+    },
+    "k": {
+      "key": "k",
+      "type": "character",
+      "assets": {
+        "face": [
+          {
+            "id": "69937804-5685-4288-816d-2fc3a02d041d",
+            "url": "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774429508354271718_QENW6GQZ.jpg",
+            "filename": "k-face-1774429520855-0.jpg",
+            "mimeType": "image/jpeg",
+            "source": "base64"
+          }
+        ],
+        "body": [
+          {
+            "id": "463a2736-c43c-431b-a3c1-5f5adec0b0f2",
+            "url": "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774429509444513320_B0sCLU4e.jpg",
+            "filename": "k-body-1774429521757-0.jpg",
+            "mimeType": "image/jpeg",
+            "source": "base64"
+          }
+        ],
+        "prop": [],
+        "outfit": [],
+        "location": []
+      },
+      "lock": {
+        "basicDescription": "",
+        "appearanceDescription": "",
+        "bodyDescription": ""
+      },
+      "meta": {
+        "createdAt": "2026-03-25T09:05:22.801Z",
+        "updatedAt": "2026-03-25T09:05:22.801Z"
       }
     }
   }

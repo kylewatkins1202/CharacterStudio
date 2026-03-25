@@ -1,0 +1,18 @@
+{
+    "compilerOptions": {
+        "target": "ES2020",
+        "module": "commonjs",
+        "checkJs": false,
+        "strict": false,
+        "noEmit": true
+    },
+    "include": [
+        "server/**/*.js",
+        "server/types.d.ts",
+        "eslint.config.js"
+    ],
+    "exclude": [
+        "node_modules",
+        "app/node_modules"
+    ]
+}

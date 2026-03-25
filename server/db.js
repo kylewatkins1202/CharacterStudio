@@ -1,3 +1,21 @@
+/**
+ * db.js
+ *
+ * Lightweight JSON file-based persistence layer for tags and gallery entries.
+ *
+ * Data files are stored in:
+ *   - Electron builds: ~/Library/Application Support/<appName>/data/
+ *   - Plain Node:      <projectRoot>/server/data/
+ *
+ * All functions ensure the data directory and files exist before reading or
+ * writing, so callers do not need to handle first-run initialization.
+ */
+
+/** @typedef {import('./types').Tag} Tag */
+/** @typedef {import('./types').TagDb} TagDb */
+/** @typedef {import('./types').GalleryEntry} GalleryEntry */
+/** @typedef {import('./types').GalleryDb} GalleryDb */
+
 const fs = require("fs/promises")
 const path = require("path")
 const { app } = (() => {
@@ -12,10 +30,23 @@ const TAG_DB_PATH = path.join(DATA_DIR, "tags.json")
 const GALLERY_DB_PATH = path.join(DATA_DIR, "gallery.json")
 const DOWNLOADS_DIR = path.join(DATA_DIR, "downloads")
 
+/**
+ * Ensure the downloads directory exists, creating it recursively if needed.
+ *
+ * @returns {Promise<void>}
+ */
 async function ensureDownloadsDir() {
     await fs.mkdir(DOWNLOADS_DIR, { recursive: true })
 }
 
+/**
+ * Ensure the data directory, downloads directory, and both JSON database files
+ * exist. Missing files are seeded with empty default structures.
+ *
+ * Safe to call multiple times — all operations are idempotent.
+ *
+ * @returns {Promise<void>}
+ */
 async function ensureDb() {
     await fs.mkdir(DATA_DIR, { recursive: true })
     await ensureDownloadsDir()
@@ -35,12 +66,23 @@ async function ensureDb() {
     }
 }
 
+/**
+ * Read and parse the full tags database from disk.
+ *
+ * @returns {Promise<TagDb>}
+ */
 async function readDb() {
     await ensureDb()
     const raw = await fs.readFile(TAG_DB_PATH, "utf8")
     return JSON.parse(raw)
 }
 
+/**
+ * Serialize and write the full tags database to disk.
+ *
+ * @param {TagDb} db
+ * @returns {Promise<void>}
+ */
 async function writeDb(db) {
     await ensureDb()
     await fs.writeFile(TAG_DB_PATH, JSON.stringify(db, null, 2), "utf8")
@@ -48,32 +90,33 @@ async function writeDb(db) {
 
 // ─── Gallery ───────────────────────────────────────────────────────────────────
 
+/**
+ * Read and parse the full gallery database from disk.
+ *
+ * @returns {Promise<GalleryDb>}
+ */
 async function readGallery() {
     await ensureDb()
     const raw = await fs.readFile(GALLERY_DB_PATH, "utf8")
     return JSON.parse(raw)
 }
 
+/**
+ * Serialize and write the full gallery database to disk.
+ *
+ * @param {GalleryDb} data
+ * @returns {Promise<void>}
+ */
 async function writeGallery(data) {
     await ensureDb()
     await fs.writeFile(GALLERY_DB_PATH, JSON.stringify(data, null, 2), "utf8")
 }
 
 /**
- * Save a generation entry to the gallery.
+ * Prepend a generation entry to the gallery (newest first) and persist it.
  *
- * @param {{
- *   id: string,
- *   imageUrl: string,
- *   userPrompt: string,
- *   compiledPrompt: string|null,
- *   compiledImages: string[],
- *   referenceImageUrls: uploadedReferenceUrls,
- *   size: string,
- *   cost: string|null,
- *   timestamp: string
- * }} entry
- * @returns {Promise<any>}
+ * @param {GalleryEntry} entry
+ * @returns {Promise<GalleryEntry>}
  */
 async function saveGalleryEntry(entry) {
     const data = await readGallery()
@@ -85,7 +128,7 @@ async function saveGalleryEntry(entry) {
 /**
  * Get all gallery entries, newest first.
  *
- * @returns {Promise<any[]>}
+ * @returns {Promise<GalleryEntry[]>}
  */
 async function getGalleryEntries() {
     const data = await readGallery()
@@ -95,8 +138,8 @@ async function getGalleryEntries() {
 /**
  * Delete a gallery entry by id.
  *
- * @param {string} id
- * @returns {Promise<boolean>}
+ * @param {string} id - The `id` field of the entry to remove.
+ * @returns {Promise<boolean>} True if an entry was removed, false if id was not found.
  */
 async function deleteGalleryEntry(id) {
     const data = await readGallery()
@@ -112,7 +155,7 @@ async function deleteGalleryEntry(id) {
  * Get a single tag by exact key.
  *
  * @param {string} key
- * @returns {Promise<any|null>}
+ * @returns {Promise<Tag|null>}
  */
 async function getTag(key) {
     const db = await readDb()
@@ -120,10 +163,10 @@ async function getTag(key) {
 }
 
 /**
- * Save or replace a tag.
+ * Save or replace a tag. Uses `tag.key` as the record identifier.
  *
- * @param {any} tag
- * @returns {Promise<any>}
+ * @param {Tag} tag
+ * @returns {Promise<Tag>}
  */
 async function saveTag(tag) {
     const db = await readDb()
@@ -133,10 +176,10 @@ async function saveTag(tag) {
 }
 
 /**
- * Get multiple tags by exact keys.
+ * Get multiple tags by exact keys. Missing keys are silently omitted.
  *
  * @param {string[]} keys
- * @returns {Promise<any[]>}
+ * @returns {Promise<Tag[]>}
  */
 async function getTags(keys) {
     const db = await readDb()
@@ -144,10 +187,10 @@ async function getTags(keys) {
 }
 
 /**
- * Get all tags, optionally filtered by a partial key search.
+ * Get all tags, optionally filtered by a partial (case-insensitive) key search.
  *
- * @param {string} [query=""]
- * @returns {Promise<any[]>}
+ * @param {string} [query=""] - Substring to match against tag keys. Pass empty string to return all.
+ * @returns {Promise<Tag[]>}
  */
 async function searchTags(query = "") {
     const db = await readDb()
@@ -166,9 +209,12 @@ async function searchTags(query = "") {
 /**
  * Update a tag in place using a mutator function.
  *
+ * Reads the current record, passes it to `updater`, and writes the result back.
+ * Returns null without writing if no tag exists for the given key.
+ *
  * @param {string} key
- * @param {(tag: any) => any} updater
- * @returns {Promise<any|null>}
+ * @param {(tag: Tag) => Tag | Promise<Tag>} updater
+ * @returns {Promise<Tag|null>}
  */
 async function updateTag(key, updater) {
     const db = await readDb()
