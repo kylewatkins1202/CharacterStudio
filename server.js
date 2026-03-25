@@ -311,6 +311,32 @@ api.delete("/gallery/:id", async (req, res) => {
 });
 
 /**
+ * PATCH /api/gallery/:id
+ * Update fields on a gallery entry (e.g. hidden).
+ */
+api.patch("/gallery/:id", async (req, res) => {
+  try {
+    const { readGallery, writeGallery } = require("./server/db");
+    const data = await readGallery();
+    const idx = data.entries.findIndex((e) => e.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: `entry not found: ${req.params.id}` });
+
+    // Only allow patching safe fields
+    const allowedFields = ["hidden"];
+    for (const field of allowedFields) {
+      if (req.body[field] !== undefined) {
+        data.entries[idx][field] = req.body[field];
+      }
+    }
+
+    await writeGallery(data);
+    res.json({ ok: true, entry: data.entries[idx] });
+  } catch (error) {
+    res.status(500).json({ error: "failed to update gallery entry", details: error.message });
+  }
+});
+
+/**
  * POST /api/gallery/:id/download
  * Downloads the image locally and updates the gallery entry with the local path.
  */
