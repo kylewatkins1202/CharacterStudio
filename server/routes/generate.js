@@ -9,8 +9,8 @@ const crypto = require("crypto");
 const express = require("express");
 const db = require("../db");
 const { uploadBufferToWaveSpeed, generateSeedreamEdit } = require("../wavespeed");
-const { parseBase64Image } = require("../imageCollage");
-const { extractTags, compilePrompt } = require("../tagCompiler");
+const { parseBase64Image } = require("../utils/imageCollage");
+const { extractTags, compilePrompt } = require("../utils/tagCompiler");
 
 const router = express.Router();
 

@@ -9,10 +9,10 @@
  * - Extracting asset URLs from tag asset arrays
  */
 
-/** @typedef {import('./types').TagAsset} TagAsset */
-/** @typedef {import('./types').ParsedImage} ParsedImage */
-/** @typedef {import('./types').UploadObject} UploadObject */
-/** @typedef {import('./types').CollageOptions} CollageOptions */
+/** @typedef {import('../types').TagAsset} TagAsset */
+/** @typedef {import('../types').ParsedImage} ParsedImage */
+/** @typedef {import('../types').UploadObject} UploadObject */
+/** @typedef {import('../types').CollageOptions} CollageOptions */
 
 const sharp = require("sharp")
 
