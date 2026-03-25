@@ -31,6 +31,14 @@ const api = {
       clearTimeout(timer);
     }
   },
+  async patch(path, body) {
+    const r = await fetch(API_BASE + path, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    return r.json();
+  },
   async delete(path, body) {
     const r = await fetch(API_BASE + path, {
       method: "DELETE",
@@ -686,6 +694,8 @@ function GeneratePage({ tags, toast, prompt, setPrompt, aspect, setAspect, baseS
 function GalleryPage({ toast, onUsePrompt, onAddReference }) {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showHidden, setShowHidden] = useState(false);
+  const [revealed, setRevealed] = useState(new Set()); // ids temporarily revealed
 
   const load = useCallback(async () => {
     try {
@@ -700,16 +710,35 @@ function GalleryPage({ toast, onUsePrompt, onAddReference }) {
   const handleDelete = async (id) => {
     try {
       const res = await api.delete(`/gallery/${id}`);
+      if (res.ok) { setEntries((p) => p.filter((e) => e.id !== id)); toast.add("Deleted", "success"); }
+      else toast.add(res.error || "Delete failed", "error");
+    } catch { toast.add("Network error", "error"); }
+  };
+
+  const handleToggleHidden = async (entry) => {
+    const next = !entry.hidden;
+    try {
+      const res = await api.patch(`/gallery/${entry.id}`, { hidden: next });
       if (res.ok) {
-        setEntries((p) => p.filter((e) => e.id !== id));
-        toast.add("Deleted", "success");
-      } else {
-        toast.add(res.error || "Delete failed", "error");
+        setEntries((p) => p.map((e) => e.id === entry.id ? { ...e, hidden: next } : e));
+        // If hiding, remove from revealed set
+        if (next) setRevealed((p) => { const s = new Set(p); s.delete(entry.id); return s; });
+        toast.add(next ? "Image hidden" : "Image visible", "success");
       }
     } catch { toast.add("Network error", "error"); }
   };
 
+  const toggleReveal = (id) => {
+    setRevealed((p) => {
+      const s = new Set(p);
+      s.has(id) ? s.delete(id) : s.add(id);
+      return s;
+    });
+  };
+
   const totalCost = entries.reduce((sum, e) => sum + parseFloat(e.cost || 0), 0);
+  const hiddenCount = entries.filter((e) => e.hidden).length;
+  const visibleEntries = entries.filter((e) => showHidden ? true : !e.hidden);
 
   return (
     <div style={{ maxWidth: 940, margin: "0 auto", padding: "40px 24px" }}>
@@ -717,91 +746,158 @@ function GalleryPage({ toast, onUsePrompt, onAddReference }) {
         <div>
           <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 36, fontWeight: 700, color: "#f0f0f0", margin: 0, letterSpacing: "-0.02em" }}>Gallery</h1>
           <p style={{ color: "#555", fontFamily: "'DM Mono', monospace", fontSize: 13, marginTop: 6 }}>
-            {loading ? "Loading…" : `${entries.length} image${entries.length !== 1 ? "s" : ""}`}
+            {loading ? "Loading…" : `${entries.length} image${entries.length !== 1 ? "s" : ""}${hiddenCount > 0 ? ` · ${hiddenCount} hidden` : ""}`}
           </p>
         </div>
-        {entries.length > 0 && (
-          <div style={{ textAlign: "right" }}>
-            <div style={{ color: "#2a2a2a", fontFamily: "'DM Mono', monospace", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 2 }}>Total cost</div>
-            <div style={{ color: "#666", fontFamily: "'DM Mono', monospace", fontSize: 20 }}>${totalCost.toFixed(4)}</div>
-          </div>
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          {hiddenCount > 0 && (
+            <button
+              onClick={() => setShowHidden((p) => !p)}
+              style={{
+                padding: "6px 14px", borderRadius: 7, cursor: "pointer",
+                border: `1px solid ${showHidden ? "#888" : "#2a2a2a"}`,
+                background: showHidden ? "#1a1a1a" : "transparent",
+                color: showHidden ? "#e0e0e0" : "#555",
+                fontFamily: "'DM Mono', monospace", fontSize: 12, transition: "all 0.15s",
+              }}
+            >
+              {showHidden ? "Hide hidden" : `Show hidden (${hiddenCount})`}
+            </button>
+          )}
+          {entries.length > 0 && (
+            <div style={{ textAlign: "right" }}>
+              <div style={{ color: "#2a2a2a", fontFamily: "'DM Mono', monospace", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 2 }}>Total cost</div>
+              <div style={{ color: "#666", fontFamily: "'DM Mono', monospace", fontSize: 20 }}>${totalCost.toFixed(4)}</div>
+            </div>
+          )}
+        </div>
       </div>
 
       {loading ? (
         <div style={{ display: "flex", justifyContent: "center", padding: "60px 0" }}>
           <div style={{ width: 32, height: 32, border: "2px solid #1e1e1e", borderTop: "2px solid #555", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
         </div>
-      ) : entries.length === 0 ? (
+      ) : visibleEntries.length === 0 ? (
         <div style={{ textAlign: "center", padding: "80px 0", color: "#2a2a2a", fontFamily: "'DM Mono', monospace", fontSize: 13 }}>
-          No images yet — generate one to get started
+          {entries.length === 0 ? "No images yet — generate one to get started" : "All images are hidden"}
         </div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(302px, 1fr))", gap: 12 }}>
-          {entries.map((entry) => (
-            <div key={entry.id} style={{ background: "#0a0a0a", border: "1px solid #141414", borderRadius: 12, overflow: "hidden" }}>
-              <img src={entry.localUrl || entry.imageUrl} alt="" style={{ width: "100%", display: "block" }} />
-              <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
-                {/* User prompt — what they actually typed */}
-                <p style={{
-                  color: "#555", fontFamily: "'DM Mono', monospace", fontSize: 11,
-                  margin: 0, lineHeight: 1.5,
-                  display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
-                }}>
-                  {entry.userPrompt}
-                </p>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    {entry.size && (
-                      <span style={{ color: "#2a2a2a", fontFamily: "'DM Mono', monospace", fontSize: 10 }}>
-                        {entry.size.replace("*", " × ")}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(310px, 1fr))", gap: 12 }}>
+          {visibleEntries.map((entry) => {
+            const isRevealed = revealed.has(entry.id);
+            const isHidden = entry.hidden;
+
+            return (
+              <div key={entry.id} style={{ background: "#0a0a0a", border: `1px solid ${isHidden ? "#1e1e1e" : "#141414"}`, borderRadius: 12, overflow: "hidden" }}>
+                {/* Image with blur overlay for hidden entries */}
+                <div style={{ position: "relative" }}>
+                  <img
+                    src={entry.localUrl || entry.imageUrl}
+                    alt=""
+                    style={{
+                      width: "100%", display: "block",
+                      filter: isHidden && !isRevealed ? "blur(24px)" : "none",
+                      transition: "filter 0.3s",
+                    }}
+                  />
+                  {isHidden && !isRevealed && (
+                    <div
+                      onClick={() => toggleReveal(entry.id)}
+                      style={{
+                        position: "absolute", inset: 0,
+                        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                        cursor: "pointer", gap: 6,
+                      }}
+                    >
+                      <div style={{ color: "#888", fontFamily: "'DM Mono', monospace", fontSize: 11, background: "rgba(0,0,0,0.6)", padding: "6px 12px", borderRadius: 6 }}>
+                        Hidden — click to reveal
+                      </div>
+                    </div>
+                  )}
+                  {isHidden && isRevealed && (
+                    <div
+                      onClick={() => toggleReveal(entry.id)}
+                      style={{
+                        position: "absolute", top: 8, right: 8, cursor: "pointer",
+                        background: "rgba(0,0,0,0.7)", borderRadius: 5,
+                        padding: "3px 8px", color: "#888",
+                        fontFamily: "'DM Mono', monospace", fontSize: 10,
+                      }}
+                    >
+                      re-hide
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+                  <p style={{
+                    color: "#444", fontFamily: "'DM Mono', monospace", fontSize: 11,
+                    margin: 0, lineHeight: 1.5,
+                    display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
+                  }}>
+                    {entry.userPrompt}
+                  </p>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      {entry.size && (
+                        <span style={{ color: "#2a2a2a", fontFamily: "'DM Mono', monospace", fontSize: 10 }}>
+                          {entry.size.replace("*", " × ")}
+                        </span>
+                      )}
+                      {entry.cost && (
+                        <span style={{ color: "#2a2a2a", fontFamily: "'DM Mono', monospace", fontSize: 10 }}>
+                          ${entry.cost}
+                        </span>
+                      )}
+                      <span style={{ color: "#1e1e1e", fontFamily: "'DM Mono', monospace", fontSize: 10 }}>
+                        {new Date(entry.timestamp).toLocaleDateString()}
                       </span>
-                    )}
-                    {entry.cost && (
-                      <span style={{ color: "#2a2a2a", fontFamily: "'DM Mono', monospace", fontSize: 10 }}>
-                        ${entry.cost}
-                      </span>
-                    )}
-                    <span style={{ color: "#1e1e1e", fontFamily: "'DM Mono', monospace", fontSize: 10 }}>
-                      {new Date(entry.timestamp).toLocaleDateString()}
-                    </span>
-                  </div>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <button
-                      onClick={() => onUsePrompt(entry)}
-                      style={{ padding: "4px 10px", background: "none", border: "1px solid #2a2a2a", borderRadius: 6, color: "#555", fontFamily: "'DM Mono', monospace", fontSize: 11, cursor: "pointer", transition: "all 0.15s", whiteSpace: "nowrap" }}
-                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#555"; e.currentTarget.style.color = "#e0e0e0"; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#555"; }}
-                    >
-                      ↑ Use
-                    </button>
-                    <button
-                      onClick={() => { onAddReference(entry.imageUrl); toast.add("Added as reference", "success"); }}
-                      style={{ padding: "4px 10px", background: "none", border: "1px solid #1e1e1e", borderRadius: 6, color: "#555", fontFamily: "'DM Mono', monospace", fontSize: 11, cursor: "pointer", transition: "all 0.15s", whiteSpace: "nowrap" }}
-                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#34d399aa"; e.currentTarget.style.color = "#34d399"; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#1e1e1e"; e.currentTarget.style.color = "#555"; }}
-                    >
-                      + Ref
-                    </button>
-                    <DownloadButton
-                      entry={entry}
-                      onDownloaded={(id, localUrl) =>
-                        setEntries((p) => p.map((e) => e.id === id ? { ...e, localUrl } : e))
-                      }
-                    />
-                    <button
-                      onClick={() => handleDelete(entry.id)}
-                      style={{ padding: "4px 10px", background: "none", border: "1px solid #1e1e1e", borderRadius: 6, color: "#333", fontFamily: "'DM Mono', monospace", fontSize: 11, cursor: "pointer", transition: "all 0.15s" }}
-                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#ff3b3b44"; e.currentTarget.style.color = "#ff3b3b"; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#1e1e1e"; e.currentTarget.style.color = "#333"; }}
-                    >
-                      ×
-                    </button>
+                    </div>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button
+                        onClick={() => onUsePrompt(entry)}
+                        style={{ padding: "4px 10px", background: "none", border: "1px solid #2a2a2a", borderRadius: 6, color: "#555", fontFamily: "'DM Mono', monospace", fontSize: 11, cursor: "pointer", transition: "all 0.15s", whiteSpace: "nowrap" }}
+                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#555"; e.currentTarget.style.color = "#e0e0e0"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#555"; }}
+                      >
+                        ↑ Use
+                      </button>
+                      <button
+                        onClick={() => { onAddReference(entry.imageUrl); toast.add("Added as reference", "success"); }}
+                        style={{ padding: "4px 10px", background: "none", border: "1px solid #1e1e1e", borderRadius: 6, color: "#555", fontFamily: "'DM Mono', monospace", fontSize: 11, cursor: "pointer", transition: "all 0.15s", whiteSpace: "nowrap" }}
+                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#34d399aa"; e.currentTarget.style.color = "#34d399"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#1e1e1e"; e.currentTarget.style.color = "#555"; }}
+                      >
+                        + Ref
+                      </button>
+                      <button
+                        onClick={() => handleToggleHidden(entry)}
+                        style={{ padding: "4px 10px", background: "none", border: "1px solid #1e1e1e", borderRadius: 6, color: isHidden ? "#888" : "#333", fontFamily: "'DM Mono', monospace", fontSize: 11, cursor: "pointer", transition: "all 0.15s", whiteSpace: "nowrap" }}
+                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#555"; e.currentTarget.style.color = "#e0e0e0"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#1e1e1e"; e.currentTarget.style.color = isHidden ? "#888" : "#333"; }}
+                      >
+                        {isHidden ? "○ Show" : "● Hide"}
+                      </button>
+                      <DownloadButton
+                        entry={entry}
+                        onDownloaded={(id, localUrl) =>
+                          setEntries((p) => p.map((e) => e.id === id ? { ...e, localUrl } : e))
+                        }
+                      />
+                      <button
+                        onClick={() => handleDelete(entry.id)}
+                        style={{ padding: "4px 10px", background: "none", border: "1px solid #1e1e1e", borderRadius: 6, color: "#333", fontFamily: "'DM Mono', monospace", fontSize: 11, cursor: "pointer", transition: "all 0.15s" }}
+                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#ff3b3b44"; e.currentTarget.style.color = "#ff3b3b"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#1e1e1e"; e.currentTarget.style.color = "#333"; }}
+                      >
+                        ×
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
