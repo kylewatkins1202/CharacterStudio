@@ -49,10 +49,15 @@ const toBase64 = (file) =>
   });
 
 function extractImageUrl(wavespeed) {
-  if (!wavespeed) return null;
-  const d = wavespeed?.data || wavespeed;
-  return d?.outputs?.[0] || d?.images?.[0] || d?.image_url || d?.url ||
-    wavespeed?.outputs?.[0] || wavespeed?.images?.[0] || wavespeed?.image_url || wavespeed?.url || null;
+    if (!wavespeed) return null;
+    const d = wavespeed?.data || wavespeed;
+    return d?.outputs?.[0] || d?.images?.[0] || d?.image_url || d?.url ||
+        wavespeed?.outputs?.[0] || wavespeed?.images?.[0] || wavespeed?.image_url || wavespeed?.url || null;
+}
+
+// Separate helper for restoring a gallery entry as a synthetic result
+function makeSyntheticResult(imageUrl) {
+    return { images: [imageUrl] };
 }
 
 function useToast() {
@@ -206,9 +211,38 @@ function PromptInput({ value, onChange, tags }) {
 
 function ImageUploadGrid({ label, files, onAdd, onRemove }) {
   const inputRef = useRef();
+  const [dragging, setDragging] = useState(false);
+
+  const addFiles = async (fileList) => {
+    const b64s = await Promise.all(Array.from(fileList).map(toBase64));
+    onAdd(b64s);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragging(false);
+    if (e.dataTransfer.files?.length) addFiles(e.dataTransfer.files);
+  };
+
   return (
-    <div>
-      <label style={{ display: "block", color: "#444", fontFamily: "'DM Mono', monospace", fontSize: 11, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.08em" }}>{label}</label>
+    <div
+      onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+      onDragLeave={(e) => {
+        // Only clear if leaving the whole grid, not a child element
+        if (!e.currentTarget.contains(e.relatedTarget)) setDragging(false);
+      }}
+      onDrop={handleDrop}
+      style={{
+        border: `1px solid ${dragging ? "#555" : "transparent"}`,
+        borderRadius: 10,
+        padding: dragging ? 6 : 0,
+        transition: "all 0.15s",
+        background: dragging ? "#0d0d0d" : "transparent",
+      }}
+    >
+      <label style={{ display: "block", color: dragging ? "#888" : "#444", fontFamily: "'DM Mono', monospace", fontSize: 11, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.08em", transition: "color 0.15s" }}>
+        {label}{dragging ? " — drop to add" : ""}
+      </label>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 8 }}>
         {files.map((src, i) => (
           <div key={i} style={{ position: "relative", aspectRatio: "1", borderRadius: 8, overflow: "hidden", border: "1px solid #1a1a1a" }}>
@@ -216,13 +250,20 @@ function ImageUploadGrid({ label, files, onAdd, onRemove }) {
             <button onClick={() => onRemove(i)} style={{ position: "absolute", top: 4, right: 4, width: 20, height: 20, borderRadius: "50%", background: "rgba(0,0,0,0.8)", border: "none", color: "#fff", fontSize: 12, cursor: "pointer" }}>×</button>
           </div>
         ))}
-        <div onClick={() => inputRef.current?.click()}
-          style={{ aspectRatio: "1", borderRadius: 8, border: "1px dashed #2a2a2a", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#333", fontSize: 22, transition: "border-color 0.2s" }}
+        <div
+          onClick={() => inputRef.current?.click()}
+          style={{
+            aspectRatio: "1", borderRadius: 8,
+            border: `1px dashed ${dragging ? "#555" : "#2a2a2a"}`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            cursor: "pointer", color: dragging ? "#555" : "#333", fontSize: 22, transition: "all 0.15s",
+          }}
           onMouseEnter={(e) => (e.currentTarget.style.borderColor = "#555")}
-          onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#2a2a2a")}>
+          onMouseLeave={(e) => (e.currentTarget.style.borderColor = dragging ? "#555" : "#2a2a2a")}
+        >
           +
           <input ref={inputRef} type="file" accept="image/*" multiple style={{ display: "none" }}
-            onChange={async (e) => onAdd(await Promise.all(Array.from(e.target.files).map(toBase64)))} />
+            onChange={(e) => addFiles(e.target.files)} />
         </div>
       </div>
     </div>
@@ -456,7 +497,7 @@ function TagDetail({ tag, onClose, onUpdated, onDeleted, toast }) {
 
 // ─── Generate Page ─────────────────────────────────────────────────────────────
 // State is owned by App so it survives tab switches
-function GeneratePage({ tags, toast, prompt, setPrompt, aspect, setAspect, baseSize, setBaseSize, loading, setLoading, result, setResult, compiled, setCompiled, onGenerated }) {
+function GeneratePage({ tags, toast, prompt, setPrompt, aspect, setAspect, baseSize, setBaseSize, loading, setLoading, result, setResult, compiled, setCompiled, onGenerated, referenceImages, setReferenceImages }) {
   const computedSize = computeSize(aspect, baseSize);
   const cost = estimateCost(computedSize);
   const imageUrl = result ? extractImageUrl(result) : null;
@@ -465,7 +506,7 @@ function GeneratePage({ tags, toast, prompt, setPrompt, aspect, setAspect, baseS
     if (!prompt.trim()) return toast.add("Please enter a prompt", "error");
     setLoading(true); setResult(null); setCompiled(null);
     try {
-      const res = await api.post("/generate", { prompt, size: computedSize });
+      const res = await api.post("/generate", { prompt, size: computedSize, referenceImages: referenceImages.filter(item => typeof item === "string") });
       if (res.ok) {
         setResult(res.wavespeed);
         setCompiled(res.compiled);
@@ -487,7 +528,14 @@ function GeneratePage({ tags, toast, prompt, setPrompt, aspect, setAspect, baseS
 
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <PromptInput value={prompt} onChange={setPrompt} tags={tags} />
-
+        {/* Reference Images */}
+        <div>
+          <label style={FL}>Reference Images <span style={{ color: "#2a2a2a", fontWeight: 400 }}>— passed directly to the model alongside tag images</span></label>
+          <ReferenceImageInput
+              images={referenceImages}
+              onChange={setReferenceImages}
+          />
+        </div>
         <div>
           <label style={FL}>Aspect Ratio</label>
           <div style={{ display: "flex", gap: 6 }}>
@@ -657,7 +705,7 @@ function GalleryPage({ toast, onUsePrompt }) {
                   </div>
                   <div style={{ display: "flex", gap: 6 }}>
                     <button
-                      onClick={() => onUsePrompt(entry.userPrompt)}
+                      onClick={() => onUsePrompt(entry)}
                       style={{ padding: "4px 10px", background: "none", border: "1px solid #2a2a2a", borderRadius: 6, color: "#555", fontFamily: "'DM Mono', monospace", fontSize: 11, cursor: "pointer", transition: "all 0.15s", whiteSpace: "nowrap" }}
                       onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#555"; e.currentTarget.style.color = "#e0e0e0"; }}
                       onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#555"; }}
@@ -778,6 +826,8 @@ export default function App() {
   const [result,   setResult]   = useState(null);
   const [compiled, setCompiled] = useState(null);
 
+  const [referenceImages, setReferenceImages] = useState([]); // base64 strings
+
   const loadTags = useCallback(async () => {
     try { const res = await api.get("/tags"); if (res.ok) setTags(res.tags); } catch {}
   }, []);
@@ -796,10 +846,44 @@ export default function App() {
   }, []);
 
   // "Use prompt" from gallery — prefill and switch to generate tab
-  const handleUsePrompt = useCallback((p) => {
-    setPrompt(p);
+  const handleUsePrompt = useCallback((entry) => {
+    setPrompt(entry.userPrompt);
+
+    // Restore reference images that were used
+    setReferenceImages(
+        entry.referenceImageUrls?.length
+            ? entry.referenceImageUrls.map(url => ({ url, isUrl: true }))
+            : []
+    );
+
+    // Restore size — parse "2048*1536" back into baseSize + aspect
+    if (entry.size) {
+        const [w, h] = entry.size.split("*").map(Number);
+        if (w && h) {
+            // Match aspect ratio
+            const gcd = (a, b) => b === 0 ? a : gcd(b, a % b);
+            const d = gcd(w, h);
+            const rw = w / d;
+            const rh = h / d;
+            const matched = ASPECT_RATIOS.find(r => r.w === rw && r.h === rh);
+            if (matched) setAspect(matched);
+            // baseSize is the longer edge
+            setBaseSize(Math.max(w, h));
+        }
+    }
+
+    // Restore compiled state
+    setResult(makeSyntheticResult(entry.imageUrl));
+    setCompiled(
+        entry.compiledPrompt || entry.compiledImages?.length
+            ? {
+                rawPrompt: entry.compiledPrompt || "",
+                images: entry.compiledImages || [],
+              }
+            : null
+    );
     setPage("generate");
-  }, []);
+  }, [setPrompt, setResult, setCompiled, setAspect, setBaseSize, setReferenceImages]);
 
   const NAV_TABS = [
     ["generate", "Generate"],
@@ -822,7 +906,7 @@ export default function App() {
       `}</style>
 
       <nav style={{ position: "sticky", top: 0, zIndex: 50, background: "rgba(8,8,8,0.94)", backdropFilter: "blur(12px)", borderBottom: "1px solid #111", display: "flex", alignItems: "center", padding: "0 28px", height: 54, gap: 32 }}>
-        <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 16, color: "#e0e0e0", fontWeight: 700, letterSpacing: "-0.02em" }}>Seedream Studio</div>
+        <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 16, color: "#e0e0e0", fontWeight: 700, letterSpacing: "-0.02em" }}>Character Studio</div>
         <div style={{ display: "flex", gap: 2 }}>
           {NAV_TABS.map(([id, label]) => (
             <button key={id} onClick={() => setPage(id)} style={{ padding: "5px 14px", borderRadius: 6, border: "none", background: page === id ? "#161616" : "transparent", color: page === id ? "#e0e0e0" : "#3a3a3a", fontFamily: "'DM Mono', monospace", fontSize: 13, cursor: "pointer", transition: "all 0.15s" }}>{label}</button>
@@ -846,6 +930,8 @@ export default function App() {
           loading={loading} setLoading={setLoading}
           result={result} setResult={setResult}
           compiled={compiled} setCompiled={setCompiled}
+          referenceImages={referenceImages}
+          setReferenceImages={setReferenceImages}
           onGenerated={handleGenerated}
         />
       </div>
@@ -861,4 +947,71 @@ export default function App() {
       <Toast toasts={toast.toasts} remove={toast.remove} />
     </>
   );
+}
+
+function ReferenceImageInput({ images, onChange }) {
+    const inputRef = useRef();
+    const [dragging, setDragging] = useState(false);
+
+    const addFiles = async (fileList) => {
+        const b64s = await Promise.all(Array.from(fileList).map(toBase64));
+        onChange((p) => [...p, ...b64s]);
+    };
+
+    const handleDrop = (e) => {
+        e.preventDefault();
+        setDragging(false);
+        if (e.dataTransfer.files?.length) addFiles(e.dataTransfer.files);
+    };
+
+    // Get display src regardless of whether item is base64 string or {url} object
+    const getSrc = (item) => typeof item === "string" ? item : item.url;
+
+    return (
+        <div>
+            <div
+                onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={handleDrop}
+                onClick={() => inputRef.current?.click()}
+                style={{
+                    border: `1px dashed ${dragging ? "#888" : "#2a2a2a"}`,
+                    borderRadius: 8,
+                    padding: "12px 16px",
+                    cursor: "pointer",
+                    background: dragging ? "#111" : "transparent",
+                    transition: "all 0.15s",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    color: "#333",
+                    fontFamily: "'DM Mono', monospace",
+                    fontSize: 12,
+                    marginBottom: images.length > 0 ? 8 : 0,
+                }}
+            >
+                <span style={{ fontSize: 18 }}>+</span>
+                <span>Drop images here or click to add reference photos</span>
+                <input ref={inputRef} type="file" accept="image/*" multiple style={{ display: "none" }}
+                    onChange={(e) => addFiles(e.target.files)} />
+            </div>
+            {images.length > 0 && (
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {images.map((item, i) => (
+                        <div key={i} style={{ position: "relative", width: 72, height: 72, borderRadius: 7, overflow: "hidden", border: "1px solid #1a1a1a", flexShrink: 0 }}>
+                            <img src={getSrc(item)} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                            {typeof item !== "string" && (
+                                // URL items show a small indicator that they're restored
+                                <div style={{ position: "absolute", bottom: 2, left: 2, background: "rgba(0,0,0,0.7)", borderRadius: 3, padding: "1px 4px", color: "#888", fontFamily: "'DM Mono', monospace", fontSize: 9 }}>ref</div>
+                            )}
+                            <button
+                                onClick={(e) => { e.stopPropagation(); onChange((p) => p.filter((_, j) => j !== i)); }}
+                                style={{ position: "absolute", top: 3, right: 3, width: 18, height: 18, borderRadius: "50%", background: "rgba(0,0,0,0.85)", border: "none", color: "#fff", fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                            >×</button>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
 }

@@ -62,10 +62,10 @@
       "assets": {
         "face": [
           {
-            "id": "72d7e2dc-0403-4851-91b9-d874e7343db2",
-            "url": "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774016822297420031_L8ybkuDO.jpg",
-            "filename": "alba-face-1774016830668-0.jpg",
-            "mimeType": "image/jpeg",
+            "id": "95929e60-d846-4074-b412-cfa7ddb0b28f",
+            "url": "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774046452833626861_KL6CyYu4.png",
+            "filename": "alba-face-1774046461307-0.png",
+            "mimeType": "image/png",
             "source": "base64"
           }
         ],
@@ -81,7 +81,7 @@
       },
       "meta": {
         "createdAt": "2026-03-20T03:00:38.879Z",
-        "updatedAt": "2026-03-20T14:27:13.814Z"
+        "updatedAt": "2026-03-20T22:41:05.003Z"
       }
     },
     "alyssa": {
@@ -138,6 +138,62 @@
       "meta": {
         "createdAt": "2026-03-20T14:56:33.295Z",
         "updatedAt": "2026-03-20T14:56:33.295Z"
+      }
+    },
+    "jess-2": {
+      "key": "jess-2",
+      "type": "character",
+      "assets": {
+        "face": [
+          {
+            "id": "da1d11ae-d1b8-45ee-8623-cd73ea7efa14",
+            "url": "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774045631438998320_ctSuDMW5.jpg",
+            "filename": "jess-2-face-1774045640643-0.jpg",
+            "mimeType": "image/jpeg",
+            "source": "base64"
+          }
+        ],
+        "body": [],
+        "prop": [],
+        "outfit": [],
+        "location": []
+      },
+      "lock": {
+        "basicDescription": "",
+        "appearanceDescription": "",
+        "bodyDescription": ""
+      },
+      "meta": {
+        "createdAt": "2026-03-20T22:27:21.841Z",
+        "updatedAt": "2026-03-20T22:27:21.841Z"
+      }
+    },
+    "alba-pink": {
+      "key": "alba-pink",
+      "type": "character",
+      "assets": {
+        "face": [
+          {
+            "id": "c3d62264-1bd3-4588-8e61-cb318211e9a9",
+            "url": "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774047759161130838_ddVKalCZ.jpg",
+            "filename": "alba-pink-face-1774047768353-0.jpg",
+            "mimeType": "image/jpeg",
+            "source": "base64"
+          }
+        ],
+        "body": [],
+        "prop": [],
+        "outfit": [],
+        "location": []
+      },
+      "lock": {
+        "basicDescription": "",
+        "appearanceDescription": "",
+        "bodyDescription": ""
+      },
+      "meta": {
+        "createdAt": "2026-03-20T23:02:49.600Z",
+        "updatedAt": "2026-03-20T23:02:49.600Z"
       }
     }
   }

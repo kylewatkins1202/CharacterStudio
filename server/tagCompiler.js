@@ -1166,9 +1166,17 @@ function buildRawPromptFromPlan({ originalPrompt, parsedPlan, tagMap }) {
         const poseClause = character.poseDescription
             ? `, ${character.poseDescription}`
             : ""
-        const wardrobeClause = character.wardrobeDescription
-            ? ` wearing ${character.wardrobeDescription}`
-            : ""
+        const NAKED_WORDS = ["naked", "nude", "nothing", "bare", "undressed", "unclothed", "no clothes", "no clothing"];
+
+        const wardrobeClause = (() => {
+            if (!character.wardrobeDescription) return "";
+            const lower = character.wardrobeDescription.toLowerCase().trim();
+            // If the description just means naked, say it directly without "wearing"
+            if (NAKED_WORDS.some((w) => lower === w || lower === `is ${w}` || lower === `are ${w}`)) {
+                return `, naked`;
+            }
+            return ` wearing ${character.wardrobeDescription}`;
+        })();
 
         if (character.useAppearance && faceStart !== null) {
             const range = faceEnd > faceStart ? `${faceStart}-${faceEnd}` : `${faceStart}`
