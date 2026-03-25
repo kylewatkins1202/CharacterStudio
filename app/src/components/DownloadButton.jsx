@@ -1,0 +1,72 @@
+import { useState } from "react";
+import { api } from "../lib/api";
+import { colors, font, radius } from "../theme";
+
+/**
+ * DownloadButton — saves a gallery image to the local downloads folder.
+ *
+ * Shows a "✓ Saved" badge if the entry already has a localUrl.
+ * While downloading, the button is disabled and shows "…".
+ *
+ * @param {{
+ *   entry: { id: string, localUrl?: string },
+ *   onDownloaded: (id: string, localUrl: string) => void
+ * }} props
+ */
+export function DownloadButton({ entry, onDownloaded }) {
+  const [downloading, setDownloading] = useState(false);
+
+  if (entry.localUrl) {
+    return (
+      <div style={{
+        padding:    "4px 10px",
+        borderRadius: radius.md - 2,
+        border:     `1px solid ${colors.borderMid}`,
+        color:      colors.borderStrong,
+        fontFamily: font.mono,
+        fontSize:   font.sizeSm,
+        userSelect: "none",
+      }}>
+        ✓ Saved
+      </div>
+    );
+  }
+
+  const handleDownload = async () => {
+    setDownloading(true);
+    try {
+      const res = await api.post(`/gallery/${entry.id}/download`);
+      if (res.ok) {
+        onDownloaded(entry.id, res.localUrl);
+      } else {
+        console.error("Download failed:", res.error);
+      }
+    } catch (err) {
+      console.error("Download error:", err);
+    }
+    setDownloading(false);
+  };
+
+  return (
+    <button
+      onClick={handleDownload}
+      disabled={downloading}
+      style={{
+        padding:      "4px 10px",
+        background:   "none",
+        border:       `1px solid #1e1e1e`,
+        borderRadius: radius.md - 2,
+        color:        downloading ? colors.borderStrong : colors.textMuted,
+        fontFamily:   font.mono,
+        fontSize:     font.sizeSm,
+        cursor:       downloading ? "not-allowed" : "pointer",
+        transition:   "all 0.15s",
+        whiteSpace:   "nowrap",
+      }}
+      onMouseEnter={(e) => { if (!downloading) { e.currentTarget.style.borderColor = colors.borderFocus; e.currentTarget.style.color = "#e0e0e0"; } }}
+      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#1e1e1e"; e.currentTarget.style.color = downloading ? colors.borderStrong : colors.textMuted; }}
+    >
+      {downloading ? "…" : "↓ Save"}
+    </button>
+  );
+}
