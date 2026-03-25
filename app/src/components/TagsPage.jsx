@@ -16,11 +16,16 @@ import { TYPE_COLOR, TYPE_ICON, colors, font, radius, fieldInput as FI } from ".
  * }} props
  */
 export function TagsPage({ tags, onTagsChange, toast }) {
+  // Text used to filter tag keys
   const [search,      setSearch]      = useState("");
+  // Active type filter — null means all types are shown
   const [typeFilter,  setTypeFilter]  = useState(null);
+  // True when the create-tag modal is open
   const [showCreate,  setShowCreate]  = useState(false);
+  // The tag currently open in the detail modal (null when closed)
   const [selectedTag, setSelectedTag] = useState(null);
 
+  // Tags that pass both the search text and the active type filter
   const filtered = tags.filter((t) =>
     t.key.toLowerCase().includes(search.toLowerCase()) &&
     (!typeFilter || t.type === typeFilter)

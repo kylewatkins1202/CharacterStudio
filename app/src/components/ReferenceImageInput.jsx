@@ -10,24 +10,31 @@ import { colors, font, radius, fieldInput as FI } from "../theme";
  * @param {{ onAdd: (url: string) => void }} props
  */
 function UrlReferenceInput({ onAdd }) {
+  // Controlled input value for the URL field
   const [url,   setUrl]   = useState("");
+  // Inline validation error message
   const [error, setError] = useState(null);
 
   const handleAdd = () => {
+    // Strip whitespace before validating
     const trimmed = url.trim();
     if (!trimmed) return;
     try {
+      // Validate by constructing a URL object — throws on invalid input
       new URL(trimmed);
+      // Pass the valid URL up and reset the input
       onAdd(trimmed);
       setUrl("");
       setError(null);
     } catch {
+      // URL constructor threw — show inline error
       setError("Invalid URL");
     }
   };
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter")  { e.preventDefault(); handleAdd(); }
+    // Escape clears the field and any error
     if (e.key === "Escape") { setUrl(""); setError(null); }
   };
 
@@ -93,25 +100,34 @@ function UrlReferenceInput({ onAdd }) {
  * }} props
  */
 export function ReferenceImageInput({ images, onChange }) {
+  // Hidden file input element for click-to-browse
   const inputRef   = useRef();
+  // True while the user is dragging over the drop zone
   const [dragging, setDragging] = useState(false);
 
   const addFiles = async (fileList) => {
+    // Convert each File to base64 in parallel
     const srcs = await Promise.all(Array.from(fileList).map(toBase64));
+    // Append new file-backed reference images with the default purpose
     onChange((p) => [...p, ...srcs.map((src) => ({ src, isUrl: false, purpose: "composition" }))]);
   };
 
   const handleDrop = (e) => {
+    // Prevent default browser file-open behavior
     e.preventDefault();
+    // Clear the drag highlight
     setDragging(false);
+    // Process dropped files if any were provided
     if (e.dataTransfer.files?.length) addFiles(e.dataTransfer.files);
   };
 
   const updatePurpose = (i, purpose) => {
+    // Immutably update the purpose of the image at index i
     onChange((p) => p.map((item, j) => (j === i ? { ...item, purpose } : item)));
   };
 
   const remove = (i) => {
+    // Remove the image at index i from the list
     onChange((p) => p.filter((_, j) => j !== i));
   };
 

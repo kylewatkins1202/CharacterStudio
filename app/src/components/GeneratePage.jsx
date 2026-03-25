@@ -49,31 +49,54 @@ export function GeneratePage({
   const cost         = estimateCost(computedSize);
   const imageUrl     = result ? extractImageUrl(result) : null;
 
+  /**
+   * Generates image and shows the image and its raw prompt to the user
+   * @returns {Promise<void>}
+   */
   const generate = async () => {
+    // If no prompt
     if (!prompt.trim()) return toast.add("Please enter a prompt", "error");
+    
+    // Set loading to true
     setLoading(true);
+
+    // Set result to null
     setResult(null);
+    
+    // Set compiled to null
     setCompiled(null);
+
     try {
-      const res = await api.post("/generate", {
+      // Request body
+      const body = {
         prompt,
         size: computedSize,
-        referenceImages: referenceImages
-          .filter((item) => !item.isUrl)
-          .map((item) => ({ data: item.src, purpose: item.purpose })),
-        referenceImageUrls: referenceImages
-          .filter((item) => item.isUrl)
-          .map((item) => ({ url: item.src, purpose: item.purpose })),
+        referenceImages: referenceImages.filter((item) => !item.isUrl).map((item) => ({ data: item.src, purpose: item.purpose })),
+        referenceImageUrls: referenceImages.filter((item) => item.isUrl).map((item) => ({ url: item.src, purpose: item.purpose })),
         resetCache,
-      });
+      }
 
+      // Generate image
+      const res = await api.post("/generate", body);
+
+      // If response is ok 
       if (res.ok) {
+        // Set result
         setResult(res.wavespeed);
+
+        // Set compiled
         setCompiled(res.compiled);
+
+        // Add tost for image generated
         toast.add("Image generated!", "success");
+
+        // Set reset cache to false
         setResetCache(false);
+
+        // Run on generated
         onGenerated();
       } else {
+        // Add toast for generation failed
         toast.add(res.error || "Generation failed", "error");
       }
     } catch (err) {

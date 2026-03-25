@@ -17,24 +17,37 @@ import { TYPE_COLOR, TYPE_ICON, colors, font, radius, fieldLabel as FL, fieldInp
  * }} props
  */
 export function TagFormModal({ existingTag, onClose, onSave, toast }) {
+  // True when editing an existing tag, false when creating a new one
   const isEdit = !!existingTag;
 
+  // Tag type — one of "character" | "prop" | "outfit" | "location"
   const [type,       setType]       = useState(existingTag?.type || null);
+  // Tag key — unique identifier used in @-mentions
   const [key,        setKey]        = useState(existingTag?.key || "");
+  // General description (props, outfits, locations)
   const [basicDesc,  setBasicDesc]  = useState(existingTag?.lock?.basicDescription || "");
+  // Visual appearance description (characters)
   const [appearDesc, setAppearDesc] = useState(existingTag?.lock?.appearanceDescription || "");
+  // Body / physique description (characters)
   const [bodyDesc,   setBodyDesc]   = useState(existingTag?.lock?.bodyDescription || "");
+  // Staged base64 images keyed by asset group, pending upload on save
   const [imgs,       setImgs]       = useState({ face: [], body: [], prop: [], outfit: [], location: [] });
+  // True while the save API call is in-flight
   const [saving,     setSaving]     = useState(false);
 
+  // Append base64 strings to an asset group's staging array
   const addImgs   = (g, a) => setImgs((p) => ({ ...p, [g]: [...p[g], ...a] }));
+  // Remove the image at index i from an asset group's staging array
   const removeImg = (g, i) => setImgs((p) => ({ ...p, [g]: p[g].filter((_, j) => j !== i) }));
 
   const save = async () => {
+    // Guard: key and type are required before submitting
     if (!key.trim()) return toast.add("Key is required", "error");
     if (!type)       return toast.add("Select a type", "error");
+    // Set in-flight state
     setSaving(true);
     try {
+      // POST to /tag with all form fields and staged images
       const res = await api.post("/tag", {
         key: key.trim(),
         type,
@@ -44,6 +57,7 @@ export function TagFormModal({ existingTag, onClose, onSave, toast }) {
         ...imgs,
       });
       if (res.ok) {
+        // Show success and pass the saved tag to the parent
         toast.add(isEdit ? "Tag updated!" : "Tag created!", "success");
         onSave(res.tag);
       } else {

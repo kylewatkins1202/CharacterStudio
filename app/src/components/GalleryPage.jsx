@@ -16,25 +16,38 @@ import { colors, font, radius } from "../theme";
  * }} props
  */
 export function GalleryPage({ toast, onUsePrompt, onAddReference }) {
+  // Array of gallery entry objects loaded from the API
   const [entries,    setEntries]    = useState([]);
+  // True while the initial load is in-flight
   const [loading,    setLoading]    = useState(true);
+  // When true, hidden images appear in the grid
   const [showHidden, setShowHidden] = useState(false);
-  const [revealed,   setRevealed]   = useState(new Set()); // ids temporarily un-blurred
+  // Set of entry ids that the user has temporarily un-blurred
+  const [revealed,   setRevealed]   = useState(new Set());
 
+  /**
+   * Fetches all gallery entries from the API.
+   * @returns {Promise<void>}
+   */
   const load = useCallback(async () => {
     try {
+      // Fetch the full gallery list
       const res = await api.get("/gallery");
+      // Store entries if the request succeeded
       if (res.ok) setEntries(res.entries);
     } catch {
       toast.add("Failed to load gallery", "error");
     }
+    // Always clear the loading spinner
     setLoading(false);
   }, [toast]);
 
+  // Load entries once on mount
   useEffect(() => { load(); }, [load]);
 
   const handleDelete = async (id) => {
     try {
+      // Send DELETE request for this entry
       const res = await api.delete(`/gallery/${id}`);
       if (res.ok) { setEntries((p) => p.filter((e) => e.id !== id)); toast.add("Deleted", "success"); }
       else toast.add(res.error || "Delete failed", "error");
@@ -44,11 +57,15 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference }) {
   };
 
   const handleToggleHidden = async (entry) => {
+    // Compute the new hidden state
     const next = !entry.hidden;
     try {
+      // PATCH the entry with the new hidden value
       const res = await api.patch(`/gallery/${entry.id}`, { hidden: next });
       if (res.ok) {
+        // Update the entry in local state
         setEntries((p) => p.map((e) => e.id === entry.id ? { ...e, hidden: next } : e));
+        // Remove from the revealed set when hiding so the blur re-applies immediately
         if (next) setRevealed((p) => { const s = new Set(p); s.delete(entry.id); return s; });
         toast.add(next ? "Image hidden" : "Image visible", "success");
       }
@@ -58,6 +75,7 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference }) {
   };
 
   const toggleReveal = (id) => {
+    // Toggle whether this hidden image is temporarily shown without changing its hidden flag
     setRevealed((p) => {
       const s = new Set(p);
       s.has(id) ? s.delete(id) : s.add(id);
@@ -65,8 +83,11 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference }) {
     });
   };
 
+  // Aggregate cost across all entries
   const totalCost     = entries.reduce((sum, e) => sum + parseFloat(e.cost || 0), 0);
+  // Count of entries marked hidden
   const hiddenCount   = entries.filter((e) => e.hidden).length;
+  // Entries visible in the grid — all or only non-hidden depending on the toggle
   const visibleEntries = entries.filter((e) => showHidden ? true : !e.hidden);
 
   return (

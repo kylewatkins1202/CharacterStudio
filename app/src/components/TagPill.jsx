@@ -6,6 +6,7 @@ import { TYPE_COLOR, font, radius } from "../theme";
  * @param {{ type: "character"|"prop"|"outfit"|"location" }} props
  */
 export function TagPill({ type }) {
+  // Look up the hex color for this tag type
   const color = TYPE_COLOR[type];
   return (
     <span style={{

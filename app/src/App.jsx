@@ -24,49 +24,83 @@ const NAV_TABS = [
  * GalleryPage unmounts on tab switch so it always re-fetches fresh data.
  */
 export default function App() {
+  // Active tab: "generate" | "gallery" | "tags"
   const [page,         setPage]         = useState("generate");
+  // All tags fetched from the API
   const [tags,         setTags]         = useState([]);
+  // Number of gallery entries — drives the nav badge label
   const [galleryCount, setGalleryCount] = useState(0);
+  // Toast notification controller
   const toast = useToast();
 
   // ── Generate page state (hoisted here so it survives tab switches) ──────────
+
+  // Raw prompt text typed by the user
   const [prompt,          setPrompt]          = useState("");
+  // Selected aspect ratio object { label, w, h }
   const [aspect,          setAspect]          = useState(ASPECT_RATIOS[0]);
+  // Slider value — longer dimension of the output image in pixels
   const [baseSize,        setBaseSize]        = useState(2048);
+  // True while the generate API call is in-flight
   const [loading,         setLoading]         = useState(false);
+  // Raw WaveSpeed result from the last generation
   const [result,          setResult]          = useState(null);
+  // Compiled prompt object { rawPrompt, images } from the last generation
   const [compiled,        setCompiled]        = useState(null);
+  // When true the next generate call skips the server-side cache
   const [resetCache,      setResetCache]      = useState(false);
+  // Array of reference image objects attached to the current prompt
   const [referenceImages, setReferenceImages] = useState([]);
 
   // ── Data loaders ─────────────────────────────────────────────────────────────
 
+  /**
+   * Fetches all tags from the API and stores them in state.
+   * @returns {Promise<void>}
+   */
   const loadTags = useCallback(async () => {
     try {
+      // Fetch tag list
       const res = await api.get("/tags");
+      // Update state if the request succeeded
       if (res.ok) setTags(res.tags);
     } catch {}
   }, []);
 
+  /**
+   * Fetches the gallery entry count and updates the nav badge.
+   * @returns {Promise<void>}
+   */
   const loadGalleryCount = useCallback(async () => {
     try {
+      // Fetch gallery metadata
       const res = await api.get("/gallery");
+      // Store the total entry count
       if (res.ok) setGalleryCount(res.count);
     } catch {}
   }, []);
 
+  // Load tags and gallery count once on mount
   useEffect(() => { loadTags(); loadGalleryCount(); }, [loadTags, loadGalleryCount]);
 
   // ── Cross-page callbacks ──────────────────────────────────────────────────────
 
-  /** Add a WaveSpeed URL as a reference image and navigate to the generate tab. */
+  /**
+   * Add a WaveSpeed URL as a reference image and navigate to the generate tab.
+   * @param {string} imageUrl
+   */
   const handleAddReference = useCallback((imageUrl) => {
+    // Append the URL as a composition reference
     setReferenceImages((p) => [...p, { src: imageUrl, isUrl: true, purpose: "composition" }]);
+    // Switch to the generate tab
     setPage("generate");
   }, []);
 
-  /** Increment the gallery badge after a successful generation. */
+  /**
+   * Increment the gallery badge after a successful generation.
+   */
   const handleGenerated = useCallback(() => {
+    // Bump the count so the nav badge stays accurate without a refetch
     setGalleryCount((p) => p + 1);
   }, []);
 
@@ -75,40 +109,58 @@ export default function App() {
    * - prefills the prompt
    * - restores reference images, aspect ratio, and base size
    * - shows the saved image as the current result
+   * @param {object} entry
    */
   const handleUsePrompt = useCallback((entry) => {
+    // Restore the original user prompt
     setPrompt(entry.userPrompt);
 
+    // Restore reference images if the entry recorded any
     setReferenceImages(
       entry.referenceImageUrls?.length
         ? entry.referenceImageUrls.map((url) => ({ src: url, isUrl: true, purpose: "composition" }))
         : []
     );
 
+    // Restore aspect ratio and base size from the recorded size string (e.g. "1024*1024")
     if (entry.size) {
+      // Split "W*H" into numeric width and height
       const [w, h] = entry.size.split("*").map(Number);
       if (w && h) {
+        // Reduce W:H to its lowest terms to match an ASPECT_RATIOS entry
         const gcd = (a, b) => (b === 0 ? a : gcd(b, a % b));
         const d   = gcd(w, h);
         const matched = ASPECT_RATIOS.find((r) => r.w === w / d && r.h === h / d);
+        // Apply the matched ratio if found
         if (matched) setAspect(matched);
+        // Restore the base size to the longer dimension
         setBaseSize(Math.max(w, h));
       }
     }
 
+    // Show the saved image as the current generation result
     setResult(makeSyntheticResult(entry.imageUrl));
+    // Restore the compiled prompt block if available
     setCompiled(
       entry.compiledPrompt || entry.compiledImages?.length
         ? { rawPrompt: entry.compiledPrompt || "", images: entry.compiledImages || [] }
         : null
     );
+    // Switch to the generate tab
     setPage("generate");
   }, []);
 
   // ── Nav labels ────────────────────────────────────────────────────────────────
 
+  /**
+   * Returns the display label for a nav tab, including the gallery count badge.
+   * @param {string} id
+   * @returns {string}
+   */
   const navLabel = (id) => {
+    // Gallery tab gets a count badge when there are entries
     if (id === "gallery") return galleryCount > 0 ? `Gallery (${galleryCount})` : "Gallery";
+    // All other tabs use their static label from NAV_TABS
     return NAV_TABS.find(([tabId]) => tabId === id)?.[1] ?? id;
   };
 
