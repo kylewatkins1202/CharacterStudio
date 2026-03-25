@@ -10,9 +10,15 @@ const DATA_DIR = app
   : path.join(__dirname, "data");                // normal node, use local
 const TAG_DB_PATH = path.join(DATA_DIR, "tags.json")
 const GALLERY_DB_PATH = path.join(DATA_DIR, "gallery.json")
+const DOWNLOADS_DIR = path.join(DATA_DIR, "downloads")
+
+async function ensureDownloadsDir() {
+    await fs.mkdir(DOWNLOADS_DIR, { recursive: true })
+}
 
 async function ensureDb() {
     await fs.mkdir(DATA_DIR, { recursive: true })
+    await ensureDownloadsDir()
 
     try {
         await fs.access(TAG_DB_PATH)
@@ -191,4 +197,8 @@ module.exports = {
     saveGalleryEntry,
     getGalleryEntries,
     deleteGalleryEntry,
+    readGallery,
+    writeGallery,
+    DOWNLOADS_DIR,
+    ensureDownloadsDir
 }

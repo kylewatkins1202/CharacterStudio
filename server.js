@@ -8,7 +8,7 @@ require("dotenv").config({ path: envPath });
 const crypto = require("crypto");
 const express = require("express");
 const cors = require("cors");
-const { ensureDb, getTag, saveTag, getTags, searchTags, updateTag, readDb, writeDb, saveGalleryEntry, getGalleryEntries, deleteGalleryEntry } = require("./server/db");
+const { ensureDb, getTag, saveTag, getTags, searchTags, updateTag, readDb, writeDb, saveGalleryEntry, getGalleryEntries, deleteGalleryEntry, DOWNLOADS_DIR } = require("./server/db");
 const { uploadBufferToWaveSpeed, generateSeedreamEdit } = require("./server/wavespeed");
 const { sanitizeTagKey, parseBase64Image } = require("./server/imageCollage");
 const {
@@ -66,7 +66,7 @@ function serializeTag(tag) {
     )
   };
 }
-  
+
 // ─── Persistent prompt compile cache ──────────────────────────────────────────
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const CACHE_PATH = path.join(__dirname, "server", "data", "prompt_cache.json");
@@ -154,6 +154,9 @@ function extractImageUrlFromResult(result) {
 api.get("/health", async (req, res) => {
   res.json({ ok: true });
 });
+
+
+api.use("/downloads", express.static(DOWNLOADS_DIR));
 
 // ── Tags ──────────────────────────────────────────────────────────────────────
 
@@ -307,6 +310,58 @@ api.delete("/gallery/:id", async (req, res) => {
   }
 });
 
+/**
+ * POST /api/gallery/:id/download
+ * Downloads the image locally and updates the gallery entry with the local path.
+ */
+api.post("/gallery/:id/download", async (req, res) => {
+  try {
+    const entries = await getGalleryEntries();
+    const entry = entries.find((e) => e.id === req.params.id);
+
+    if (!entry) {
+      return res.status(404).json({ error: `entry not found: ${req.params.id}` });
+    }
+
+    if (entry.localPath) {
+      // Already downloaded — return existing local URL
+      return res.json({ ok: true, localUrl: `/api/downloads/${path.basename(entry.localPath)}` });
+    }
+
+    // Fetch the remote image
+    const response = await fetch(entry.imageUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch image: ${response.status}`);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    // Detect extension from content-type
+    const contentType = response.headers.get("content-type") || "image/jpeg";
+    const ext = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
+    const filename = `${entry.id}.${ext}`;
+    const localPath = path.join(DOWNLOADS_DIR, filename);
+
+    // Write to disk
+    await fs.writeFile(localPath, buffer);
+
+    // Update the gallery entry with the local path
+    const { readGallery, writeGallery } = require("./server/db");
+    const data = await readGallery();
+    const idx = data.entries.findIndex((e) => e.id === req.params.id);
+    if (idx !== -1) {
+      data.entries[idx].localPath = localPath;
+      data.entries[idx].localUrl = `/api/downloads/${filename}`;
+      await writeGallery(data);
+    }
+
+    res.json({ ok: true, localUrl: `/api/downloads/${filename}` });
+  } catch (error) {
+    res.status(500).json({ error: "failed to download image", details: error.message });
+  }
+});
+
 // ── Compile ───────────────────────────────────────────────────────────────────
 
 api.post("/compile", async (req, res) => {
@@ -339,7 +394,6 @@ api.post("/generate", async (req, res) => {
     const tagLocks = req.body.tagLocks || {};
     const enableSyncMode = req.body.enable_sync_mode !== false;
     const enableBase64Output = req.body.enable_base64_output === true;
-    const rawReferenceImages = Array.isArray(req.body.referenceImages) ? req.body.referenceImages : [];
     const resetCache = req.body.resetCache === true;
 
     if (!prompt) return res.status(400).json({ error: "prompt is required" });
@@ -365,37 +419,93 @@ api.post("/generate", async (req, res) => {
         compiled = await compilePrompt({
           prompt, tags, tagLocks,
           parserOptions: { model: LLM_MODEL },
-          visionOptions: { enable: true, force: false, model: VISION_MODEL }
+          visionOptions: { enable: false, force: false, model: VISION_MODEL }
         });
         await setCached(cacheKey, compiled);
       }
     }
 
     // Upload any raw base64 reference images and get their URLs
-    const uploadedReferenceUrls = await Promise.all(
-        rawReferenceImages.map(async (b64, i) => {
-            const parsed = parseBase64Image(b64);
-            const filename = `ref-${Date.now()}-${i}.${parsed.ext}`;
-            const uploaded = await uploadBufferToWaveSpeed(parsed.buffer, filename, parsed.mimeType);
-            return uploaded.url;
-        })
+    const rawReferenceImages = Array.isArray(req.body.referenceImages) ? req.body.referenceImages : [];
+    const rawReferenceUrls = Array.isArray(req.body.referenceImageUrls) ? req.body.referenceImageUrls : [];
+
+    // Get url referenced images
+    // Build a flat list of { url, purpose } for all reference images
+    const PURPOSE_DIRECTIVES = {
+      composition: {
+        singular: "Use image[{n}] as a reference for the overall composition, framing, and subject placement.",
+        plural:   "Use image[{n}] as a reference for the overall composition, framing, and placement of all subjects.",
+      },
+      style: {
+        singular: "Use image[{n}] as a reference for the visual style, lighting mood, and color grade.",
+        plural:   "Use image[{n}] as a reference for the visual style, lighting mood, and color grade across all subjects.",
+      },
+      pose: {
+        singular: "Use image[{n}] as a reference for the subject's body pose, gesture, and stance.",
+        plural:   "Use image[{n}] as a reference for the subjects' body poses, gestures, and stances.",
+      },
+      scene: {
+        singular: "Use image[{n}] as a reference for the background, environment, and setting.",
+        plural:   "Use image[{n}] as a reference for the background, environment, and setting shared by all subjects.",
+      },
+      wardrobe: {
+        singular: "Use image[{n}] as a reference for clothing, styling, and accessories.",
+        plural:   "Use image[{n}] as a reference for the clothing, styling, and accessories of the subjects.",
+      },
+      face: {
+        singular: "Use image[{n}] as a reference for facial features and appearance.",
+        plural:   "Use image[{n}] as a reference for the facial features and appearance of the subjects.",
+      },
+    };
+
+    // Upload base64 items, keeping purpose alongside
+    const uploadedBase64 = await Promise.all(
+      rawReferenceImages.map(async (item, i) => {
+        const b64 = typeof item === "string" ? item : item.data;
+        const purpose = (typeof item === "object" && item.purpose) ? item.purpose : "composition";
+        const parsed = parseBase64Image(b64);
+        const filename = `ref-${Date.now()}-${i}.${parsed.ext}`;
+        const uploaded = await uploadBufferToWaveSpeed(parsed.buffer, filename, parsed.mimeType);
+        return { url: uploaded.url, purpose };
+      })
     );
 
-    // Reference images go FIRST so their indices are predictable
-    const allImages = [...uploadedReferenceUrls, ...(compiled?.images ?? [])];
+    // URL items already have a purpose attached
+    const uploadedUrlItems = rawReferenceUrls.map(item =>
+      typeof item === "string"
+        ? { url: item, purpose: "composition" }
+        : { url: item.url, purpose: item.purpose || "composition" }
+    );
 
-    // If there are reference images, prepend a directive to the prompt
-    let finalPrompt = compiled?.rawPrompt ?? prompt;
-    if (uploadedReferenceUrls.length > 0) {
-        const refDirectives = uploadedReferenceUrls
-            .map((_, i) => `Use image[${i + 1}] as a visual reference for the overall scene style and composition.`)
-            .join("\n");
-        finalPrompt = `${finalPrompt}\n\n${refDirectives}`;
+    const allReferenceItems = [...uploadedUrlItems, ...uploadedBase64];
+    const uploadedReferenceUrls = allReferenceItems.map(item => item.url);
+    
+    // Final prompt
+    let finalPrompt = compiled.rawPrompt ?? prompt
+
+    // All reference items
+    if (allReferenceItems.length > 0) {
+      const characterCount = (compiled?.parsedPlan?.characters ?? tags.filter(t => t.type === "character")).length;
+      const isPlural = characterCount > 1;
+      const baseIndex = (compiled?.images ?? []).length;
+
+      const refDirectives = allReferenceItems.map(({ purpose }, i) => {
+        const n = baseIndex + i + 1;
+        const entry = PURPOSE_DIRECTIVES[purpose] || PURPOSE_DIRECTIVES.composition;
+        const template = isPlural ? entry.plural : entry.singular;
+        return template.replace("{n}", n);
+      }).join("\n");
+
+      finalPrompt = `${finalPrompt}\n\n${refDirectives}`;
     }
 
+    if (!compiled) compiled = { images: [], rawPrompt: prompt };
+    compiled.images.push(...uploadedReferenceUrls);
+    compiled.rawPrompt = finalPrompt
+
     const result = await generateSeedreamEdit({
-        images: allImages,
-        prompt: finalPrompt,
+        images: compiled.images,
+        prompt: compiled.rawPrompt,
         size,
         enableSyncMode,
         enableBase64Output
