@@ -1,0 +1,63 @@
+<svg width="512" height="512" viewBox="0 0 680 680" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <clipPath id="iconClip">
+      <rect x="100" y="100" width="480" height="480" rx="120"/>
+    </clipPath>
+    <linearGradient id="ag" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#a78bfa"/>
+      <stop offset="100%" stop-color="#38bdf8"/>
+    </linearGradient>
+    <linearGradient id="cGrad" x1="0" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#c4b5fd"/>
+      <stop offset="100%" stop-color="#38bdf8"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="100" y="100" width="480" height="480" rx="120" fill="#0a0a0f"/>
+
+  <g clip-path="url(#iconClip)">
+    <circle cx="340" cy="340" r="210" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="0.8"/>
+    <circle cx="340" cy="340" r="168" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="0.8"/>
+    <circle cx="340" cy="340" r="126" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="0.8"/>
+    <circle cx="340" cy="340" r="84"  fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="0.8"/>
+
+    <line x1="130" y1="340" x2="550" y2="340" stroke="rgba(255,255,255,0.07)" stroke-width="0.8"/>
+    <line x1="340" y1="130" x2="340" y2="550" stroke="rgba(255,255,255,0.07)" stroke-width="0.8"/>
+    <line x1="191" y1="191" x2="489" y2="489" stroke="rgba(255,255,255,0.07)" stroke-width="0.8"/>
+    <line x1="489" y1="191" x2="191" y2="489" stroke="rgba(255,255,255,0.07)" stroke-width="0.8"/>
+
+    <circle cx="340" cy="172" r="2.5" fill="rgba(255,255,255,0.12)"/>
+    <circle cx="340" cy="508" r="2.5" fill="rgba(255,255,255,0.12)"/>
+    <circle cx="172" cy="340" r="2.5" fill="rgba(255,255,255,0.12)"/>
+    <circle cx="508" cy="340" r="2.5" fill="rgba(255,255,255,0.12)"/>
+    <circle cx="221" cy="221" r="2.5" fill="rgba(255,255,255,0.12)"/>
+    <circle cx="459" cy="221" r="2.5" fill="rgba(255,255,255,0.12)"/>
+    <circle cx="221" cy="459" r="2.5" fill="rgba(255,255,255,0.12)"/>
+    <circle cx="459" cy="459" r="2.5" fill="rgba(255,255,255,0.12)"/>
+
+    <path d="M 430 198 A 168 168 0 1 0 430 482"
+          fill="none" stroke="url(#ag)" stroke-width="1.5" stroke-linecap="round" opacity="0.3"/>
+
+    <circle cx="430" cy="198" r="3.5" fill="url(#ag)" opacity="0.5"/>
+    <circle cx="430" cy="482" r="3.5" fill="url(#ag)" opacity="0.5"/>
+
+    <path d="M 420 228
+             C 390 210, 355 202, 318 206
+             C 248 214, 196 272, 196 340
+             C 196 408, 248 466, 318 474
+             C 355 478, 390 470, 420 452"
+          fill="none" stroke="url(#cGrad)" stroke-width="28" stroke-linecap="round"/>
+
+    <path d="M 418 234
+             C 390 217, 356 210, 320 214
+             C 255 221, 206 276, 206 340
+             C 206 404, 255 459, 320 466
+             C 356 470, 390 463, 418 446"
+          fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="10" stroke-linecap="round"/>
+
+    <circle cx="340" cy="340" r="5" fill="url(#ag)"/>
+    <circle cx="340" cy="340" r="10" fill="none" stroke="url(#ag)" stroke-width="1" opacity="0.4"/>
+  </g>
+
+  <rect x="100" y="100" width="480" height="480" rx="120" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+</svg>
