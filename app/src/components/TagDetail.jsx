@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { api } from "../lib/api";
 import { TagPill } from "./TagPill";
 import { ImageUploadGrid } from "./ImageUploadGrid";
+import { AssetPickerModal } from "./AssetPickerModal";
 import { colors, font, radius, fieldLabel as FL } from "../theme";
 
 /**
@@ -10,18 +11,13 @@ import { colors, font, radius, fieldLabel as FL } from "../theme";
  */
 export function TagDetail({ tag, onClose, onUpdated, onDeleted, toast }) {
   // The asset group currently expanded for adding new images (null when closed)
-  const [addingGroup,   setAddingGroup]   = useState(null);
-  // Which add tab is active: "upload" | "assets"
-  const [addTab,        setAddTab]        = useState("upload");
+  const [addingGroup,  setAddingGroup]  = useState(null);
   // Staged base64 images before they are uploaded
-  const [newImgs,       setNewImgs]       = useState([]);
-  // Unassigned assets available to pick from
-  const [unassigned,    setUnassigned]    = useState([]);
-  const [loadingAssets, setLoadingAssets] = useState(false);
-  // Selected asset IDs in the From Assets tab
-  const [selected,      setSelected]      = useState(new Set());
+  const [newImgs,      setNewImgs]      = useState([]);
+  // Which group's AssetPickerModal is open (null = none)
+  const [pickerGroup,  setPickerGroup]  = useState(null);
   // True while an upload or assign API call is in-flight
-  const [saving,        setSaving]        = useState(false);
+  const [saving,       setSaving]       = useState(false);
   // True when the delete-confirmation dialog is shown
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -31,21 +27,9 @@ export function TagDetail({ tag, onClose, onUpdated, onDeleted, toast }) {
     tag.type === "outfit"    ? ["outfit"]        :
                                ["location"];
 
-  // Load unassigned assets whenever the From Assets tab opens
-  useEffect(() => {
-    if (addTab !== "assets" || addingGroup === null) return;
-    setLoadingAssets(true);
-    api.get("/assets")
-      .then((res) => { if (res.ok) setUnassigned(res.assets); })
-      .catch(() => toast.add("Failed to load assets", "error"))
-      .finally(() => setLoadingAssets(false));
-  }, [addTab, addingGroup]); // eslint-disable-line react-hooks/exhaustive-deps
-
   const openAddPanel = (group) => {
     setAddingGroup(group);
-    setAddTab("upload");
     setNewImgs([]);
-    setSelected(new Set());
   };
 
   // ── Upload new images ──────────────────────────────────────────────────────
@@ -69,23 +53,20 @@ export function TagDetail({ tag, onClose, onUpdated, onDeleted, toast }) {
     setSaving(false);
   };
 
-  // ── Assign existing assets ─────────────────────────────────────────────────
+  // ── Assign existing assets from picker ────────────────────────────────────
 
-  const handleAssignAssets = async () => {
-    if (!selected.size) return toast.add("Select at least one asset", "error");
+  const handlePickAssets = async (assets) => {
+    if (!assets.length) return;
     setSaving(true);
     try {
       const results = await Promise.all(
-        [...selected].map((id) =>
-          api.post(`/tags/${tag.key}/assets/${id}`, { group: addingGroup })
-        )
+        assets.map((a) => api.post(`/tags/${tag.key}/assets/${a.id}`, { group: addingGroup }))
       );
       const lastOk = results.filter((r) => r.ok).at(-1);
       if (lastOk) {
         toast.add("Assets assigned!", "success");
         onUpdated(lastOk.tag);
         setAddingGroup(null);
-        setSelected(new Set());
       } else {
         toast.add(results[0]?.error || "Failed", "error");
       }
@@ -117,19 +98,6 @@ export function TagDetail({ tag, onClose, onUpdated, onDeleted, toast }) {
     }
   };
 
-  // ── Shared styles ──────────────────────────────────────────────────────────
-
-  const tabStyle = (active) => ({
-    padding:      "5px 12px",
-    background:   active ? colors.borderMid : "transparent",
-    border:       `1px solid ${active ? colors.borderStrong : colors.border}`,
-    borderRadius: radius.sm,
-    color:        active ? colors.textMid : colors.textMuted,
-    fontFamily:   font.mono,
-    fontSize:     font.sizeSm,
-    cursor:       "pointer",
-  });
-
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
@@ -146,6 +114,15 @@ export function TagDetail({ tag, onClose, onUpdated, onDeleted, toast }) {
       }}
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
+      {pickerGroup && (
+        <AssetPickerModal
+          title={`Pick ${pickerGroup} images`}
+          excludeIds={(tag.assets[pickerGroup] || []).map((a) => a.id)}
+          onClose={() => setPickerGroup(null)}
+          onSelect={(assets) => { setPickerGroup(null); handlePickAssets(assets); }}
+        />
+      )}
+
       <div style={{
         background:    colors.surfaceModal,
         border:        `1px solid #1e1e1e`,
@@ -228,106 +205,43 @@ export function TagDetail({ tag, onClose, onUpdated, onDeleted, toast }) {
               {/* ── Add panel ────────────────────────────────────────────── */}
               {addingGroup === group && (
                 <div style={{ background: colors.surfaceDeep, border: `1px solid ${colors.borderMid}`, borderRadius: radius.lg, padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-                  {/* Tab switcher */}
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <button style={tabStyle(addTab === "upload")} onClick={() => { setAddTab("upload"); setNewImgs([]); }}>Upload new</button>
-                    <button style={tabStyle(addTab === "assets")} onClick={() => { setAddTab("assets"); setSelected(new Set()); }}>From assets</button>
+                  <ImageUploadGrid
+                    label={`New ${group} images`}
+                    files={newImgs}
+                    onAdd={(a) => setNewImgs((p) => [...p, ...a])}
+                    onRemove={(i) => setNewImgs((p) => p.filter((_, j) => j !== i))}
+                  />
+                  <button
+                    onClick={() => setPickerGroup(group)}
+                    style={{
+                      padding:      "7px 14px",
+                      background:   "none",
+                      border:       `1px solid ${colors.borderStrong}`,
+                      borderRadius: radius.md - 1,
+                      color:        colors.textMuted,
+                      fontFamily:   font.mono,
+                      fontSize:     font.sizeMd,
+                      cursor:       "pointer",
+                      textAlign:    "left",
+                    }}
+                  >
+                    + From assets
+                  </button>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      onClick={() => { setAddingGroup(null); setNewImgs([]); }}
+                      style={{ padding: "7px 14px", background: "none", border: `1px solid ${colors.borderStrong}`, borderRadius: radius.md - 1, color: colors.textMuted, fontFamily: font.mono, fontSize: font.sizeMd, cursor: "pointer" }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleAddImages}
+                      disabled={saving || !newImgs.length}
+                      style={{ padding: "7px 18px", background: newImgs.length ? colors.primary : colors.borderMid, border: "none", borderRadius: radius.md - 1, color: newImgs.length ? colors.primaryText : colors.textGhost, fontFamily: font.mono, fontSize: font.sizeMd, fontWeight: 600, cursor: (saving || !newImgs.length) ? "not-allowed" : "pointer" }}
+                    >
+                      {saving ? "Uploading…" : "Upload"}
+                    </button>
                   </div>
-
-                  {/* Upload tab */}
-                  {addTab === "upload" && (
-                    <>
-                      <ImageUploadGrid
-                        label={`New ${group} images`}
-                        files={newImgs}
-                        onAdd={(a) => setNewImgs((p) => [...p, ...a])}
-                        onRemove={(i) => setNewImgs((p) => p.filter((_, j) => j !== i))}
-                      />
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <button
-                          onClick={() => { setAddingGroup(null); setNewImgs([]); }}
-                          style={{ padding: "7px 14px", background: "none", border: `1px solid ${colors.borderStrong}`, borderRadius: radius.md - 1, color: colors.textMuted, fontFamily: font.mono, fontSize: font.sizeMd, cursor: "pointer" }}
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={handleAddImages}
-                          disabled={saving}
-                          style={{ padding: "7px 18px", background: colors.primary, border: "none", borderRadius: radius.md - 1, color: colors.primaryText, fontFamily: font.mono, fontSize: font.sizeMd, fontWeight: 600, cursor: saving ? "not-allowed" : "pointer" }}
-                        >
-                          {saving ? "Uploading…" : "Upload"}
-                        </button>
-                      </div>
-                    </>
-                  )}
-
-                  {/* From assets tab */}
-                  {addTab === "assets" && (
-                    <>
-                      {loadingAssets ? (
-                        <div style={{ color: colors.textGhost, fontFamily: font.mono, fontSize: font.sizeSm, padding: "8px 0" }}>Loading…</div>
-                      ) : unassigned.length === 0 ? (
-                        <div style={{ color: colors.textGhost, fontFamily: font.mono, fontSize: font.sizeSm, padding: "8px 0" }}>
-                          No assets yet. Upload images in the Assets page first.
-                        </div>
-                      ) : (
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))", gap: 8, maxHeight: 280, overflowY: "auto" }}>
-                          {unassigned.map((asset) => {
-                            const isSelected = selected.has(asset.id);
-                            const fallback = asset.assetPath
-                              ? "/api/assets/" + asset.assetPath.split("/").map(encodeURIComponent).join("/")
-                              : null;
-                            return (
-                              <div
-                                key={asset.id}
-                                onClick={() => setSelected((prev) => {
-                                  const next = new Set(prev);
-                                  isSelected ? next.delete(asset.id) : next.add(asset.id);
-                                  return next;
-                                })}
-                                style={{
-                                  position:     "relative",
-                                  aspectRatio:  "1",
-                                  borderRadius: radius.md,
-                                  overflow:     "hidden",
-                                  border:       `2px solid ${isSelected ? colors.primary : colors.borderMid}`,
-                                  cursor:       "pointer",
-                                  transition:   "border-color 0.15s",
-                                }}
-                              >
-                                <img
-                                  src={asset.url}
-                                  onError={(e) => { if (fallback && e.target.src !== fallback) e.target.src = fallback; }}
-                                  alt=""
-                                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                                />
-                                {isSelected && (
-                                  <div style={{ position: "absolute", inset: 0, background: `${colors.primary}33`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                    <span style={{ color: colors.primary, fontSize: 20, lineHeight: 1 }}>✓</span>
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <button
-                          onClick={() => { setAddingGroup(null); setSelected(new Set()); }}
-                          style={{ padding: "7px 14px", background: "none", border: `1px solid ${colors.borderStrong}`, borderRadius: radius.md - 1, color: colors.textMuted, fontFamily: font.mono, fontSize: font.sizeMd, cursor: "pointer" }}
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={handleAssignAssets}
-                          disabled={saving || selected.size === 0}
-                          style={{ padding: "7px 18px", background: selected.size > 0 ? colors.primary : colors.borderMid, border: "none", borderRadius: radius.md - 1, color: selected.size > 0 ? colors.primaryText : colors.textGhost, fontFamily: font.mono, fontSize: font.sizeMd, fontWeight: 600, cursor: (saving || selected.size === 0) ? "not-allowed" : "pointer" }}
-                        >
-                          {saving ? "Assigning…" : `Assign${selected.size > 0 ? ` (${selected.size})` : ""}`}
-                        </button>
-                      </div>
-                    </>
-                  )}
                 </div>
               )}
             </div>

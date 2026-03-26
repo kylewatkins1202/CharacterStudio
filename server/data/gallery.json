@@ -1,6 +1,93 @@
 {
   "entries": [
     {
+      "id": "5faf430a-acbd-4e0a-bf04-cf228e4e0e1b",
+      "imageAssetId": "c72f5855-1943-4cec-a6b9-ac3b732c01d0",
+      "referenceAssetIds": [],
+      "userPrompt": "A dramatic cinematic far shot of @jess  standing with her arms in the air. she is wearing underwear and bra and a thin waste. dime lit, dramatic lighting, dark room, shadow over half of her face",
+      "compiledPrompt": "A dramatic cinematic far shot.\ndime lit, dramatic lighting, dark room, shadow over half of her face\n\n\n\nUse image[1] exclusively for Jess, arms in the air wearing underwear and bra.\n\nUse image[2] exclusively for the body shape of Jess.\n\n\n\nEach person is a completely distinct individual. Do not mix or merge facial features, hair, or appearance between subjects",
+      "compiledImages": [
+        "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774489800317245431_YdnwGPZ9.png",
+        "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774426696075342688_fL08W5nE.jpg"
+      ],
+      "size": "2496*4416",
+      "cost": "0.6613",
+      "timestamp": "2026-03-26T07:06:26.513Z"
+    },
+    {
+      "id": "dac952f5-447b-411a-8e20-232113a1acfd",
+      "imageAssetId": "6741d350-8e80-4d31-9bbf-6cd2f3de9cad",
+      "referenceAssetIds": [],
+      "userPrompt": "A dramatic cinematic far shot of @jess  standing with her arms in the air. she is wearing underwear and bra and a thin waste. dime lit, dramatic lighting, dark room, shadow over half of her face",
+      "compiledPrompt": "A dramatic cinematic far shot.\ndime lit, dramatic lighting, dark room, shadow over half of her face\n\n\n\nUse image[1] exclusively for Jess, arms in the air wearing underwear and bra.\n\nUse image[2] exclusively for the body shape of Jess.\n\n\n\nEach person is a completely distinct individual. Do not mix or merge facial features, hair, or appearance between subjects",
+      "compiledImages": [
+        "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774489800317245431_YdnwGPZ9.png",
+        "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774426696075342688_fL08W5nE.jpg"
+      ],
+      "size": "4416*3328",
+      "cost": "0.8818",
+      "timestamp": "2026-03-26T06:57:47.924Z"
+    },
+    {
+      "id": "b3afe15b-9387-4633-9cd5-e62a800baaa4",
+      "imageAssetId": "042bd997-872b-4c21-ae9c-b1f73247a1c9",
+      "referenceAssetIds": [],
+      "userPrompt": "A dramatic cinematic far shot of @jess  standing with her arms in the air. she is wearing underwear and bra and a thin waste. dime lit, dramatic lighting, dark room, shadow over half of her face",
+      "compiledPrompt": "A dramatic cinematic far shot.\ndime lit, dramatic lighting, dark room, shadow over half of her face\n\n\n\nUse image[1] exclusively for Jess, arms in the air wearing underwear and bra.\n\nUse image[2] exclusively for the body shape of Jess.\n\n\n\nEach person is a completely distinct individual. Do not mix or merge facial features, hair, or appearance between subjects",
+      "compiledImages": [
+        "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774489800317245431_YdnwGPZ9.png",
+        "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774426696075342688_fL08W5nE.jpg"
+      ],
+      "size": "4416*3328",
+      "cost": "0.8818",
+      "timestamp": "2026-03-26T06:57:01.852Z"
+    },
+    {
+      "id": "1fc81b1a-c63b-4df5-bd61-3389961dd1ea",
+      "imageAssetId": "e990f3e9-5d15-4693-b74d-e51dcea05bf9",
+      "referenceAssetIds": [],
+      "userPrompt": "A dramatic cinematic far shot of @jess  standing with her arms in the air. she is wearing underwear and bra and a thin waste. dime lit, dramatic lighting, dark room, shadow over half of her face",
+      "compiledPrompt": "A dramatic cinematic far shot.\ndime lit, dramatic lighting, dark room, shadow over half of her face\n\n\n\nUse image[1] exclusively for Jess, arms in the air wearing underwear and bra.\n\nUse image[2] exclusively for the body shape of Jess.\n\n\n\nEach person is a completely distinct individual. Do not mix or merge facial features, hair, or appearance between subjects",
+      "compiledImages": [
+        "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774489800317245431_YdnwGPZ9.png",
+        "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774426696075342688_fL08W5nE.jpg"
+      ],
+      "size": "4416*3328",
+      "cost": "0.8818",
+      "timestamp": "2026-03-26T06:55:56.600Z"
+    },
+    {
+      "id": "c634c9b2-2106-4f00-ac5c-af8354a879df",
+      "imageAssetId": "3d1dae0c-75da-4888-bfb9-d269518fae5f",
+      "referenceAssetIds": [],
+      "userPrompt": "A dramatic cinematic far shot of @jess  standing with her arms in the air. she is wearing underwear and bra and a thin waste. dime lit, dramatic lighting, dark room, shadow over half of her face",
+      "compiledPrompt": "A dramatic cinematic far shot.\ndime lit, dramatic lighting, dark room, shadow over half of her face\n\n\n\nUse image[1] exclusively for jess, arms in the air wearing underwear and bra and a thin waste.\n\nUse image[2] exclusively for the body shape of jess.\n\n\n\nEach person is a completely distinct individual. Do not mix or merge facial features, hair, or appearance between subjects",
+      "compiledImages": [
+        "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774489800317245431_YdnwGPZ9.png",
+        "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774428223527034627_5MEOV6fo.jpg"
+      ],
+      "size": "4416*3328",
+      "cost": "0.8818",
+      "timestamp": "2026-03-26T06:52:52.149Z"
+    },
+    {
+      "id": "2e6d5245-92d8-492e-b38d-4f667139c1e1",
+      "imageAssetId": "ba48a7ec-926d-4ac4-983f-7fa7b4ac8507",
+      "referenceAssetIds": [
+        "89c1f299-9891-41fb-a346-0c7a0a296ff3"
+      ],
+      "userPrompt": "A dramatic cinematic far shot of a woman standing with her arms in the air. she is wearing underwear and bra. dime lit, dramatic lighting, dark room, shadow over half of her face. @jess is the woman",
+      "compiledPrompt": "A dramatic cinematic far shot of a woman standing with her arms in the air. dime lit, dramatic lighting, dark room, shadow over half of her face.\n\n\n\nUse image[1] exclusively for the woman, arms in the air wearing underwear and bra.\n\nUse image[2] exclusively for the body shape of the woman.\n\n\n\nEach person is a completely distinct individual. Do not mix or merge facial features, hair, or appearance between subjects\n\nUse image[3] as a reference for the visual style, lighting mood, and color grade.",
+      "compiledImages": [
+        "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774489800317245431_YdnwGPZ9.png",
+        "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774428223527034627_5MEOV6fo.jpg",
+        "https://d1q70pf5vjeyhc.cloudfront.net/predictions/f80f79bcc09b43fa885ba7ba0106ca59/1.jpeg"
+      ],
+      "size": "2880*5120",
+      "cost": "0.8847",
+      "timestamp": "2026-03-26T06:42:47.662Z"
+    },
+    {
       "id": "ab8aed7c-8cf0-4024-96d1-8bba6079fa6c",
       "imageAssetId": "410e57c5-a88b-492c-b2b4-fd9210c9f24c",
       "referenceAssetIds": [
@@ -442,7 +529,8 @@
       "size": "4032*3008",
       "cost": "0.7277",
       "timestamp": "2026-03-25T10:32:03.895Z",
-      "hidden": true
+      "hidden": true,
+      "imageAssetId": "0ad14353-359d-47a3-a49c-f6029f3923e5"
     },
     {
       "id": "45f57720-258c-439d-b1da-2f7241629e59",
@@ -461,7 +549,8 @@
       "size": "4032*3008",
       "cost": "0.7277",
       "timestamp": "2026-03-25T10:29:28.175Z",
-      "hidden": true
+      "hidden": true,
+      "imageAssetId": "ef72d6b4-01be-40cb-a981-9ae75670ba61"
     },
     {
       "id": "6f712833-bffb-4a9f-81cd-577be8c33f5a",
@@ -480,7 +569,8 @@
       "size": "4032*3008",
       "cost": "0.7277",
       "timestamp": "2026-03-25T10:27:38.797Z",
-      "hidden": true
+      "hidden": true,
+      "imageAssetId": "8d213d0c-cad7-4c10-bdd7-7361897f63e4"
     },
     {
       "id": "43f04974-6877-408f-9c96-e93756f77fe9",
@@ -499,7 +589,8 @@
       "size": "4032*3008",
       "cost": "0.7277",
       "timestamp": "2026-03-25T10:26:40.446Z",
-      "hidden": true
+      "hidden": true,
+      "imageAssetId": "cae9080d-c849-4a57-99db-2089b8dee975"
     },
     {
       "id": "593a905c-1df6-4028-a7c9-75f30bb7aadd",
@@ -539,7 +630,8 @@
       "size": "4032*3008",
       "cost": "0.7277",
       "timestamp": "2026-03-25T10:20:24.491Z",
-      "hidden": true
+      "hidden": true,
+      "imageAssetId": "2dc735f1-4e8c-4ca6-9142-9b723f97bc34"
     },
     {
       "id": "caf09af9-5aee-467a-afae-3143e759473d",
@@ -600,7 +692,8 @@
       "size": "3136*2368",
       "cost": "0.4456",
       "timestamp": "2026-03-25T10:10:02.560Z",
-      "hidden": true
+      "hidden": true,
+      "imageAssetId": "885a65d5-cd12-466a-8569-389f341789d7"
     },
     {
       "id": "7e936c42-21f4-49c0-aa44-752b064e1640",
@@ -640,7 +733,8 @@
       "size": "3136*2368",
       "cost": "0.4456",
       "timestamp": "2026-03-25T09:55:30.908Z",
-      "hidden": true
+      "hidden": true,
+      "imageAssetId": "bbd92094-3b7b-4691-94a8-4cf9682ee416"
     },
     {
       "id": "578344c6-183e-4932-a349-6e1baa7977eb",
@@ -771,7 +865,8 @@
       "size": "3136*3136",
       "cost": "0.5901",
       "timestamp": "2026-03-25T08:59:41.512Z",
-      "hidden": true
+      "hidden": true,
+      "imageAssetId": "21930c5d-b50b-44af-8b98-df4ce356e62a"
     },
     {
       "id": "c0317ac7-2c5a-40cd-b125-f9e7b3baa7c5",
@@ -899,7 +994,8 @@
       "size": "3136*3136",
       "cost": "0.5901",
       "timestamp": "2026-03-25T08:40:36.813Z",
-      "hidden": true
+      "hidden": true,
+      "imageAssetId": "b74b99dd-aea0-462f-b518-ab8a80f1a64b"
     },
     {
       "id": "0ef9c688-f52c-4171-90ec-8951440d0555",
@@ -917,7 +1013,8 @@
       "size": "3136*3136",
       "cost": "0.5901",
       "timestamp": "2026-03-25T08:39:48.920Z",
-      "hidden": true
+      "hidden": true,
+      "imageAssetId": "a7ddef4d-2f74-4f2e-9631-b5d83ec380d8"
     },
     {
       "id": "ace30c1b-d7f5-40f4-b0b3-49ab860ed36f",
@@ -935,7 +1032,8 @@
       "size": "3136*3136",
       "cost": "0.5901",
       "timestamp": "2026-03-25T08:38:59.990Z",
-      "hidden": true
+      "hidden": true,
+      "imageAssetId": "bd276cd1-2999-4c8a-b746-643ebf60db7d"
     },
     {
       "id": "59897c34-d770-4b8d-b390-3b0b05edd3dc",
@@ -953,7 +1051,8 @@
       "size": "3136*3136",
       "cost": "0.5901",
       "timestamp": "2026-03-25T08:35:59.585Z",
-      "hidden": true
+      "hidden": true,
+      "imageAssetId": "471e0130-ad20-4cba-8f1d-decd72cb3fbb"
     },
     {
       "id": "9ac50afe-9e78-40b9-a32a-1f03b2d3869f",
@@ -971,7 +1070,8 @@
       "size": "3136*3136",
       "cost": "0.5901",
       "timestamp": "2026-03-25T08:34:06.206Z",
-      "hidden": true
+      "hidden": true,
+      "imageAssetId": "9a32718d-c59f-4a7e-b0c3-e3ebb48216b5"
     },
     {
       "id": "c796e4eb-7fda-4834-b81c-ac66170e4ef1",
@@ -1041,7 +1141,8 @@
       "size": "3136*3136",
       "cost": "0.5901",
       "timestamp": "2026-03-25T08:23:01.231Z",
-      "hidden": true
+      "hidden": true,
+      "imageAssetId": "1874c146-a2a8-4484-9e10-0e197f54a7bd"
     },
     {
       "id": "dd40cb9f-1226-44a2-86bf-2976706ea8cf",
@@ -1056,7 +1157,8 @@
       "size": "3136*3136",
       "cost": "0.5901",
       "timestamp": "2026-03-25T08:22:25.180Z",
-      "hidden": true
+      "hidden": true,
+      "imageAssetId": "5e26dc89-517b-4fc9-b4b2-19e2de9fe405"
     },
     {
       "id": "a6dd6289-9501-489e-b27f-f09262920cbf",
@@ -1071,7 +1173,8 @@
       "size": "3136*3136",
       "cost": "0.5901",
       "timestamp": "2026-03-25T08:20:42.274Z",
-      "hidden": true
+      "hidden": true,
+      "imageAssetId": "8ffaedd9-69f0-4a14-b9e8-2d7bb8d5a5c7"
     },
     {
       "id": "1621132f-b776-455e-8d41-e1a17d84fc9a",
@@ -1089,7 +1192,8 @@
       "size": "3136*3136",
       "cost": "0.5901",
       "timestamp": "2026-03-25T08:19:21.380Z",
-      "hidden": true
+      "hidden": true,
+      "imageAssetId": "be89da2b-9fea-4831-bf62-04f87c019670"
     },
     {
       "id": "77bd9259-3b85-47a7-a8a3-86c2aed225df",

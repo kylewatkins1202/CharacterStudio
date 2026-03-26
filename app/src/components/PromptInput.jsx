@@ -48,10 +48,11 @@ function tokenize(str, tagKeys) {
  *   so the parent is unaffected by the pill rendering.
  */
 export function PromptInput({ value, onChange, tags }) {
-  const [mentionQuery, setMentionQuery] = useState(null);
-  const [mentionStart, setMentionStart] = useState(null);
-  const [activeSug,    setActiveSug]    = useState(0);
-  const [focused,      setFocused]      = useState(false);
+  const [mentionQuery,      setMentionQuery]      = useState(null);
+  const [mentionStart,      setMentionStart]      = useState(null);
+  const [mentionReplaceEnd, setMentionReplaceEnd] = useState(null);
+  const [activeSug,         setActiveSug]         = useState(0);
+  const [focused,           setFocused]           = useState(false);
   const editorRef = useRef(null);
 
   const tagKeys = useMemo(() => new Set(tags.map((t) => t.key)), [tags]);
@@ -156,15 +157,34 @@ export function PromptInput({ value, onChange, tags }) {
     const el = editorRef.current;
     if (!el) return;
     const str    = serializeDom(el);
-    const before = getBeforeCursor();
-    const prefix = str.slice(0, mentionStart);   // text before the @
-    const suffix = str.slice(before.length);     // text after cursor
+    const end    = mentionReplaceEnd ?? getBeforeCursor().length;
+    const prefix = str.slice(0, mentionStart);
+    const suffix = str.slice(end);
     const newVal = prefix + "@" + tag.key + " " + suffix;
     onChange(newVal);
     renderToDOM(newVal);
     setMentionQuery(null);
     setMentionStart(null);
+    setMentionReplaceEnd(null);
     setTimeout(() => { editorRef.current?.focus(); moveCursorToEnd(); }, 0);
+  };
+
+  const handlePillClick = (e) => {
+    const span = e.target.closest("[data-tag]");
+    if (!span || !editorRef.current?.contains(span)) return;
+    // Serialize everything before this span to find its position in the string
+    let before = "";
+    for (const node of editorRef.current.childNodes) {
+      if (node === span) break;
+      if (node.nodeType === Node.TEXT_NODE) before += node.textContent;
+      else if (node.dataset?.tag) before += "@" + node.dataset.tag;
+      else before += serializeDom(node);
+    }
+    const key = span.dataset.tag;
+    setMentionStart(before.length);
+    setMentionReplaceEnd(before.length + 1 + key.length);
+    setMentionQuery("");
+    setActiveSug(0);
   };
 
   const handleKeyDown = (e) => {
@@ -208,6 +228,7 @@ export function PromptInput({ value, onChange, tags }) {
       insertTag(filtered[activeSug]);
     } else if (e.key === "Escape") {
       setMentionQuery(null);
+      setMentionReplaceEnd(null);
     }
   };
 
@@ -230,6 +251,7 @@ export function PromptInput({ value, onChange, tags }) {
         suppressContentEditableWarning
         onInput={handleInput}
         onKeyDown={handleKeyDown}
+        onClick={handlePillClick}
         onFocus={() => setFocused(true)}
         onBlur={() => {
           setFocused(false);

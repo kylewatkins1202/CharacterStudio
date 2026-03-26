@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "../lib/api";
 import { DownloadButton } from "./DownloadButton";
+import { ImageLightbox } from "./ImageLightbox";
 import { colors, font, radius } from "../theme";
 
 /**
@@ -24,6 +25,8 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference }) {
   const [showHidden, setShowHidden] = useState(false);
   // Set of entry ids that the user has temporarily un-blurred
   const [revealed,   setRevealed]   = useState(new Set());
+  // URL of the image currently open in the lightbox (null = closed)
+  const [lightboxSrc, setLightboxSrc] = useState(null);
 
   /**
    * Fetches all gallery entries from the API.
@@ -92,6 +95,7 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference }) {
 
   return (
     <div style={{ maxWidth: 940, margin: "0 auto", padding: "40px 24px" }}>
+      {lightboxSrc && <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />}
       {/* Page header */}
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 32 }}>
         <div>
@@ -159,11 +163,13 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference }) {
                   <img
                     src={entry.localUrl || entry.imageUrl}
                     alt=""
+                    onClick={() => { if (!isHidden || isRevealed) setLightboxSrc(entry.localUrl || entry.imageUrl); }}
                     style={{
                       width:      "100%",
                       display:    "block",
                       filter:     isHidden && !isRevealed ? "blur(24px)" : "none",
                       transition: "filter 0.3s",
+                      cursor:     (!isHidden || isRevealed) ? "zoom-in" : "default",
                     }}
                   />
                   {isHidden && !isRevealed && (
