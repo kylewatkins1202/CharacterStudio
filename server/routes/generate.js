@@ -11,6 +11,7 @@ const db = require("../db");
 const { uploadBufferToWaveSpeed, generateSeedreamEdit } = require("../api/wavespeed");
 const { parseBase64Image } = require("../utils/imageCollage");
 const { extractTags, compilePrompt } = require("../utils/tagCompiler");
+const { healTagAssets } = require("../utils/assets");
 
 const router = express.Router();
 
@@ -89,7 +90,8 @@ router.post("/generate", async (req, res) => {
     if (!prompt) return res.status(400).json({ error: "prompt is required" });
 
     const tagKeys = extractTags(prompt);
-    const tagList = await db.tags.getTags(tagKeys);
+    // Heal stale CDN URLs before compilation — re-uploads from local copies as needed
+    const tagList = await healTagAssets(await db.tags.getTags(tagKeys));
 
     let compiled;
 
