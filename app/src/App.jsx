@@ -173,24 +173,26 @@ export default function App() {
     <>
       <style>{globalCss}</style>
 
-      {/* Top navigation bar */}
+      {/* Top navigation bar — also serves as the drag region for the frameless window */}
       <nav style={{
-        position:       "sticky",
-        top:            0,
-        zIndex:         50,
-        background:     "rgba(8,8,8,0.94)",
-        backdropFilter: "blur(12px)",
-        borderBottom:   `1px solid #111`,
-        display:        "flex",
-        alignItems:     "center",
-        padding:        "0 28px",
-        height:         54,
-        gap:            32,
+        position:          "sticky",
+        top:               0,
+        zIndex:            50,
+        background:        "rgba(8,8,8,0.94)",
+        backdropFilter:    "blur(12px)",
+        borderBottom:      `1px solid #111`,
+        display:           "flex",
+        alignItems:        "center",
+        padding:           "0 0 0 28px",
+        height:            54,
+        gap:               32,
+        WebkitAppRegion:   "drag",
+        userSelect:        "none",
       }}>
         <div style={{ fontFamily: font.serif, fontSize: font.sizeNav, color: "#e0e0e0", fontWeight: 700, letterSpacing: "-0.02em" }}>
           Character Studio
         </div>
-        <div style={{ display: "flex", gap: 2 }}>
+        <div style={{ display: "flex", gap: 2, WebkitAppRegion: "no-drag" }}>
           {NAV_TABS.map(([id]) => (
             <button
               key={id}
@@ -212,26 +214,58 @@ export default function App() {
           ))}
         </div>
         <div style={{ flex: 1 }} />
-        <div style={{ color: colors.borderMid, fontFamily: font.mono, fontSize: font.sizeSm }}>
+        <div style={{ color: colors.borderMid, fontFamily: font.mono, fontSize: font.sizeSm, WebkitAppRegion: "no-drag" }}>
           {tags.length} tag{tags.length !== 1 ? "s" : ""}
         </div>
         {/* Gear icon — opens settings modal */}
         <button
           onClick={() => setSettingsOpen(true)}
           style={{
-            background:  "none",
-            border:      "none",
-            color:       colors.textMuted,
-            cursor:      "pointer",
-            fontSize:    18,
-            padding:     "4px 6px",
-            lineHeight:  1,
-            borderRadius: 6,
+            background:      "none",
+            border:          "none",
+            color:           colors.textMuted,
+            cursor:          "pointer",
+            fontSize:        18,
+            padding:         "4px 6px",
+            lineHeight:      1,
+            borderRadius:    6,
+            WebkitAppRegion: "no-drag",
           }}
           title="Settings"
         >
           ⚙
         </button>
+        {/* Window controls */}
+        {window.electronAPI && (
+          <div style={{ display: "flex", alignItems: "stretch", height: "100%", marginLeft: 8, WebkitAppRegion: "no-drag" }}>
+            {[
+              { label: "─", action: "minimize", hover: "#1e1e1e" },
+              { label: "□", action: "maximize", hover: "#1e1e1e" },
+              { label: "×", action: "close",    hover: "#c0392b" },
+            ].map(({ label, action, hover }) => (
+              <button
+                key={action}
+                onClick={() => window.electronAPI[action]()}
+                style={{
+                  width:        46,
+                  height:       "100%",
+                  background:   "none",
+                  border:       "none",
+                  color:        colors.textMuted,
+                  fontSize:     action === "maximize" ? 12 : 18,
+                  cursor:       "pointer",
+                  fontFamily:   font.mono,
+                  transition:   "background 0.15s, color 0.15s",
+                  lineHeight:   1,
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = hover; if (action === "close") e.currentTarget.style.color = "#fff"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = colors.textMuted; }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
       </nav>
 
       {settingsOpen && (

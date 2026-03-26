@@ -260,7 +260,7 @@ export function PromptInput({ value, onChange, tags }) {
         data-placeholder="Describe your scene… use @tag to reference characters, outfits, props & locations"
         style={{
           width:        "100%",
-          minHeight:    "5.5em",
+          minHeight:    "20.5em",
           background:   colors.surfaceDeep,
           border:       `1px solid ${focused ? colors.borderFocus : colors.borderStrong}`,
           borderRadius: radius.lg,

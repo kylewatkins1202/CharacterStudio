@@ -47,7 +47,7 @@ db.setupDb()
   })
   .then(() => {
     app.listen(PORT, () => {
-      console.log(`\n  🎨  Seedream Studio`);
+      console.log(`\n  🎨  Character Studio`);
       console.log(`  ➜  API:    http://localhost:${PORT}/api`);
       console.log(`  ➜  Client: http://localhost:5173  (dev)\n`);
     });

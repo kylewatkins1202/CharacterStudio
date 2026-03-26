@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell } = require("electron");
+const { app, BrowserWindow, shell, ipcMain } = require("electron");
 const path = require("path");
 const { spawn } = require("child_process");
 
@@ -26,13 +26,22 @@ function createWindow() {
     height: 900,
     minWidth: 900,
     minHeight: 600,
-    titleBarStyle: "hiddenInset", // macOS native feel
+    icon: path.join(__dirname, "favicon.svg"),
+    frame: false,
     backgroundColor: "#080808",
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      preload: path.join(__dirname, "preload.js"),
     },
   });
+
+  ipcMain.on("win:minimize", () => mainWindow?.minimize());
+  ipcMain.on("win:maximize", () => {
+    if (mainWindow?.isMaximized()) mainWindow.unmaximize();
+    else mainWindow?.maximize();
+  });
+  ipcMain.on("win:close", () => mainWindow?.close());
 
   // In dev load Vite dev server, in prod load the built client
   const url = isDev

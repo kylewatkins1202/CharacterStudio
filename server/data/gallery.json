@@ -1,20 +1,6 @@
 {
   "entries": [
     {
-      "id": "5faf430a-acbd-4e0a-bf04-cf228e4e0e1b",
-      "imageAssetId": "c72f5855-1943-4cec-a6b9-ac3b732c01d0",
-      "referenceAssetIds": [],
-      "userPrompt": "A dramatic cinematic far shot of @jess  standing with her arms in the air. she is wearing underwear and bra and a thin waste. dime lit, dramatic lighting, dark room, shadow over half of her face",
-      "compiledPrompt": "A dramatic cinematic far shot.\ndime lit, dramatic lighting, dark room, shadow over half of her face\n\n\n\nUse image[1] exclusively for Jess, arms in the air wearing underwear and bra.\n\nUse image[2] exclusively for the body shape of Jess.\n\n\n\nEach person is a completely distinct individual. Do not mix or merge facial features, hair, or appearance between subjects",
-      "compiledImages": [
-        "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774489800317245431_YdnwGPZ9.png",
-        "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774426696075342688_fL08W5nE.jpg"
-      ],
-      "size": "2496*4416",
-      "cost": "0.6613",
-      "timestamp": "2026-03-26T07:06:26.513Z"
-    },
-    {
       "id": "dac952f5-447b-411a-8e20-232113a1acfd",
       "imageAssetId": "6741d350-8e80-4d31-9bbf-6cd2f3de9cad",
       "referenceAssetIds": [],
