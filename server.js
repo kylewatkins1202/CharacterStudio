@@ -17,6 +17,7 @@ require("dotenv").config({ path: envPath });
 const express = require("express");
 const cors = require("cors");
 const db = require("./server/db");
+const { setApiKey } = require("./server/api/wavespeed");
 
 const app = express();
 // Default port is 4989; can be overridden via PORT env var
@@ -39,6 +40,11 @@ app.use("/api", require("./server/routes"));
 
 // Initialize data directories and seed JSON files before accepting connections
 db.setupDb()
+  .then(async () => {
+    // Load the persisted API key and activate it — falls back to the env var if unset
+    const saved = await db.settings.getSettings();
+    setApiKey(saved.wavespeedApiKey || process.env.WAVESPEED_API_KEY || "");
+  })
   .then(() => {
     app.listen(PORT, () => {
       console.log(`\n  🎨  Seedream Studio`);

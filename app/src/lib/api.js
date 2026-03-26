@@ -36,6 +36,15 @@ export const api = {
     }
   },
 
+  async put(path, body) {
+    const r = await fetch(API_BASE + path, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    return r.json();
+  },
+
   async patch(path, body) {
     const r = await fetch(API_BASE + path, {
       method: "PATCH",

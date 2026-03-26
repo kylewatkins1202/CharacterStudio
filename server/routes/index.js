@@ -21,5 +21,6 @@ router.use(require("./tags"));
 router.use(require("./gallery"));
 router.use(require("./generate"));
 router.use(require("./compile"));
+router.use(require("./settings"));
 
 module.exports = router;

@@ -28,8 +28,11 @@ const DATA_DIR = app
 const TAG_DB_PATH     = path.join(DATA_DIR, "tags.json");
 const GALLERY_DB_PATH = path.join(DATA_DIR, "gallery.json");
 
-// Directory ehere cache is stored
+// Path to the prompt compile cache file
 const CACHE_PATH      = path.join(DATA_DIR, "prompt_cache.json")
+
+// Path to the user settings file
+const SETTINGS_PATH   = path.join(DATA_DIR, "settings.json")
 
 // Directory where locally downloaded gallery images are saved.
 const DOWNLOADS_DIR = path.join(DATA_DIR, "downloads");
@@ -39,5 +42,6 @@ module.exports = {
   TAG_DB_PATH,
   GALLERY_DB_PATH,
   DOWNLOADS_DIR,
-  CACHE_PATH
+  CACHE_PATH,
+  SETTINGS_PATH
 };

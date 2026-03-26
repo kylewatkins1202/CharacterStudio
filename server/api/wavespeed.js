@@ -17,7 +17,8 @@
 const axios = require("axios")
 const FormData = require("form-data")
 
-const WAVESPEED_API_KEY = process.env.WAVESPEED_API_KEY
+// Mutable so the settings route can update it at runtime without restarting
+let WAVESPEED_API_KEY = process.env.WAVESPEED_API_KEY || "";
 const WAVESPEED_BASE_URL = "https://api.wavespeed.ai/api/v3"
 
 const WAVESPEED_UPLOAD_URL = `${WAVESPEED_BASE_URL}/media/upload/binary`
@@ -281,7 +282,20 @@ function extractLLMText(result) {
     return ""
 }
 
+/**
+ * Replace the active WaveSpeed API key at runtime.
+ *
+ * Called at server startup (from server.js) to load the persisted key,
+ * and by the settings route whenever the user saves a new key.
+ *
+ * @param {string} key
+ */
+function setApiKey(key) {
+    WAVESPEED_API_KEY = key || "";
+}
+
 module.exports = {
+    setApiKey,
     uploadBufferToWaveSpeed,
     generateSeedreamEdit,
     callAnyLLM,
