@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "../lib/api";
+import { ImageLightbox } from "./ImageLightbox";
 import { colors, font } from "../theme";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -47,13 +48,14 @@ function fileToBase64(file) {
 
 // ─── AssetThumb ───────────────────────────────────────────────────────────────
 
-function AssetThumb({ asset, size = 180 }) {
+function AssetThumb({ asset, size = 180, onExpand }) {
   const fallback = localUrl(asset);
   return (
     <img
       src={asset.url}
       onError={(e) => { if (fallback && e.target.src !== fallback) e.target.src = fallback; }}
       alt={asset.filename}
+      onClick={() => !asset.hidden && onExpand?.(asset.url)}
       style={{
         width:        "100%",
         height:       size,
@@ -65,6 +67,7 @@ function AssetThumb({ asset, size = 180 }) {
         transition:   "opacity 0.2s",
         background:   colors.surface,
         border:       `1px solid ${colors.border}`,
+        cursor:       asset.hidden ? "default" : "zoom-in",
       }}
     />
   );
@@ -72,7 +75,7 @@ function AssetThumb({ asset, size = 180 }) {
 
 // ─── AssetCard ────────────────────────────────────────────────────────────────
 
-function AssetCard({ asset, onUse, onToggleHidden, onDelete }) {
+function AssetCard({ asset, onUse, onToggleHidden, onDelete, onExpand }) {
   const iconBtn = {
     padding:        "4px 7px",
     background:     "transparent",
@@ -99,7 +102,7 @@ function AssetCard({ asset, onUse, onToggleHidden, onDelete }) {
       opacity:       asset.hidden ? 0.5 : 1,
       transition:    "opacity 0.2s",
     }}>
-      <AssetThumb asset={asset} />
+      <AssetThumb asset={asset} onExpand={onExpand} />
 
       <div style={{ padding: "8px 10px", display: "flex", flexDirection: "column", gap: 6 }}>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -204,10 +207,11 @@ function UploadZone({ onFiles, uploading }) {
 // ─── AssetsPage ───────────────────────────────────────────────────────────────
 
 export function AssetsPage({ toast, onAddReference }) {
-  const [assets,     setAssets]     = useState([]);
-  const [loading,    setLoading]    = useState(true);
-  const [uploading,  setUploading]  = useState(false);
-  const [showHidden, setShowHidden] = useState(false);
+  const [assets,      setAssets]      = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [uploading,   setUploading]   = useState(false);
+  const [showHidden,  setShowHidden]  = useState(false);
+  const [lightboxSrc, setLightboxSrc] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -271,6 +275,7 @@ export function AssetsPage({ toast, onAddReference }) {
 
   return (
     <div style={{ padding: "32px 28px", maxWidth: 1400, margin: "0 auto" }}>
+      {lightboxSrc && <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />}
 
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
@@ -321,6 +326,7 @@ export function AssetsPage({ toast, onAddReference }) {
               onUse={onAddReference}
               onToggleHidden={handleToggleHidden}
               onDelete={handleDelete}
+              onExpand={(src) => setLightboxSrc(src)}
             />
           ))}
         </div>

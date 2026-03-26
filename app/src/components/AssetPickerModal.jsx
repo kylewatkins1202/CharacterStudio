@@ -28,9 +28,6 @@ export function AssetPickerModal({ onClose, onSelect, title = "Pick from assets"
   useEffect(() => { load(); }, [load]);
 
   const toggle = (id) => {
-    // Only selectable if not hidden
-    const asset = assets.find((a) => a.id === id);
-    if (asset?.hidden) return;
     setSelected((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
@@ -38,11 +35,10 @@ export function AssetPickerModal({ onClose, onSelect, title = "Pick from assets"
     });
   };
 
-  const [localRevealed, setLocalRevealed] = useState(new Set());
-
-  const handleReveal = (e, id) => {
+  const handleToggleHidden = async (e, asset) => {
     e.stopPropagation();
-    setLocalRevealed((p) => { const s = new Set(p); s.has(id) ? s.delete(id) : s.add(id); return s; });
+    const res = await api.patch(`/assets/${asset.id}`, { hidden: !asset.hidden });
+    if (res.ok) setAssets((p) => p.map((a) => a.id === asset.id ? { ...a, hidden: !asset.hidden } : a));
   };
 
   const handleConfirm = () => {
@@ -150,9 +146,8 @@ export function AssetPickerModal({ onClose, onSelect, title = "Pick from assets"
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: 10 }}>
               {visible.map((asset) => {
-                const isSelected  = selected.has(asset.id);
-                const isRevealed  = Boolean(asset.hidden) && localRevealed.has(asset.id);
-                const isHidden    = Boolean(asset.hidden) && !localRevealed.has(asset.id);
+                const isSelected = selected.has(asset.id);
+                const isHidden   = Boolean(asset.hidden);
                 const fallback   = asset.assetPath
                   ? "/api/assets/" + asset.assetPath.split("/").map(encodeURIComponent).join("/")
                   : null;
@@ -165,8 +160,8 @@ export function AssetPickerModal({ onClose, onSelect, title = "Pick from assets"
                       aspectRatio:  "1",
                       borderRadius: radius.md,
                       overflow:     "hidden",
-                      border:       `2px solid ${isSelected ? colors.primary : isHidden ? colors.border : colors.borderMid}`,
-                      cursor:       isHidden ? "default" : "pointer",
+                      border:       `2px solid ${isSelected ? colors.primary : colors.borderMid}`,
+                      cursor:       "pointer",
                       transition:   "border-color 0.15s",
                       opacity:      isHidden ? 0.5 : 1,
                     }}
@@ -189,55 +184,27 @@ export function AssetPickerModal({ onClose, onSelect, title = "Pick from assets"
                         <span style={{ color: "#fff", fontSize: 22, lineHeight: 1, textShadow: "0 1px 4px rgba(0,0,0,0.6)" }}>✓</span>
                       </div>
                     )}
-                    {/* Unhide overlay for hidden assets */}
-                    {isHidden && (
-                      <div style={{
-                        position:       "absolute",
-                        inset:          0,
-                        display:        "flex",
-                        alignItems:     "center",
-                        justifyContent: "center",
-                      }}>
-                        <button
-                          onClick={(e) => handleReveal(e, asset.id)}
-                          style={{
-                            padding:      "3px 8px",
-                            background:   "rgba(0,0,0,0.75)",
-                            border:       `1px solid ${colors.borderStrong}`,
-                            borderRadius: radius.sm,
-                            color:        colors.textMuted,
-                            fontFamily:   font.mono,
-                            fontSize:     9,
-                            cursor:       "pointer",
-                          }}
-                        >
-                          unhide
-                        </button>
-                      </div>
-                    )}
-                    {/* Re-hide button for locally revealed assets */}
-                    {isRevealed && (
-                      <button
-                        onClick={(e) => handleReveal(e, asset.id)}
-                        style={{
-                          position:     "absolute",
-                          top:          4,
-                          right:        4,
-                          padding:      "2px 6px",
-                          background:   "rgba(0,0,0,0.75)",
-                          border:       `1px solid ${colors.borderStrong}`,
-                          borderRadius: radius.sm,
-                          color:        colors.textMuted,
-                          fontFamily:   font.mono,
-                          fontSize:     9,
-                          cursor:       "pointer",
-                        }}
-                      >
-                        re-hide
-                      </button>
-                    )}
+                    {/* Hide / unhide toggle */}
+                    <button
+                      onClick={(e) => handleToggleHidden(e, asset)}
+                      style={{
+                        position:     "absolute",
+                        top:          4,
+                        right:        4,
+                        padding:      "2px 6px",
+                        background:   "rgba(0,0,0,0.75)",
+                        border:       `1px solid ${colors.borderStrong}`,
+                        borderRadius: radius.sm,
+                        color:        colors.textMuted,
+                        fontFamily:   font.mono,
+                        fontSize:     9,
+                        cursor:       "pointer",
+                      }}
+                    >
+                      {isHidden ? "unhide" : "hide"}
+                    </button>
                     {/* Label */}
-                    {!isHidden && (asset.purpose || asset.filename) && (
+                    {(asset.purpose || asset.filename) && (
                       <div style={{
                         position:     "absolute",
                         bottom:       0,
