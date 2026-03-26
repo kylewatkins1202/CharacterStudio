@@ -57,15 +57,15 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference }) {
   };
 
   const handleToggleHidden = async (entry) => {
-    // Compute the new hidden state
     const next = !entry.hidden;
     try {
-      // PATCH the entry with the new hidden value
-      const res = await api.patch(`/gallery/${entry.id}`, { hidden: next });
+      // Hidden lives on the asset record; fall back to gallery-level for legacy entries
+      const endpoint = entry.imageAssetId
+        ? `/assets/${entry.imageAssetId}`
+        : `/gallery/${entry.id}`;
+      const res = await api.patch(endpoint, { hidden: next });
       if (res.ok) {
-        // Update the entry in local state
         setEntries((p) => p.map((e) => e.id === entry.id ? { ...e, hidden: next } : e));
-        // Remove from the revealed set when hiding so the blur re-applies immediately
         if (next) setRevealed((p) => { const s = new Set(p); s.delete(entry.id); return s; });
         toast.add(next ? "Image hidden" : "Image visible", "success");
       }
@@ -213,7 +213,7 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference }) {
                         ↑ Use
                       </button>
                       <button
-                        onClick={() => { onAddReference(entry.imageUrl); toast.add("Added as reference", "success"); }}
+                        onClick={() => { onAddReference({ id: entry.imageAssetId, url: entry.imageUrl, purpose: "composition" }); toast.add("Added as reference", "success"); }}
                         style={{ padding: "4px 10px", background: "none", border: `1px solid #1e1e1e`, borderRadius: radius.md - 2, color: colors.textMuted, fontFamily: font.mono, fontSize: font.sizeSm, cursor: "pointer", transition: "all 0.15s", whiteSpace: "nowrap" }}
                         onMouseEnter={(e) => { e.currentTarget.style.borderColor = `${colors.tagLocation}aa`; e.currentTarget.style.color = colors.tagLocation; }}
                         onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#1e1e1e"; e.currentTarget.style.color = colors.textMuted; }}

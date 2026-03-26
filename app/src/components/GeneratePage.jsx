@@ -71,8 +71,12 @@ export function GeneratePage({
       const body = {
         prompt,
         size: computedSize,
-        referenceImages: referenceImages.filter((item) => !item.isUrl).map((item) => ({ data: item.src, purpose: item.purpose })),
-        referenceImageUrls: referenceImages.filter((item) => item.isUrl).map((item) => ({ url: item.src, purpose: item.purpose })),
+        // Existing assets picked from the library — resolved server-side by ID
+        referenceAssetIds:  referenceImages.filter((i) => i.assetId).map((i) => ({ id: i.assetId, purpose: i.purpose })),
+        // New base64 uploads — creates an asset record on the backend
+        referenceImages:    referenceImages.filter((i) => !i.assetId && !i.isUrl).map((i) => ({ data: i.src, purpose: i.purpose })),
+        // Pasted URLs — healed if a matching asset exists, used as-is otherwise
+        referenceImageUrls: referenceImages.filter((i) => i.isUrl).map((i) => ({ url: i.url || i.src, purpose: i.purpose })),
         resetCache,
       }
 

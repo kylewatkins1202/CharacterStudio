@@ -91,13 +91,11 @@ export default function App() {
   // ── Cross-page callbacks ──────────────────────────────────────────────────────
 
   /**
-   * Add a WaveSpeed URL as a reference image and navigate to the generate tab.
-   * @param {string} imageUrl
+   * Add an existing asset as a reference image and navigate to the generate tab.
+   * @param {{ id: string, url: string, purpose?: string }} asset
    */
-  const handleAddReference = useCallback((imageUrl) => {
-    // Append the URL as a composition reference
-    setReferenceImages((p) => [...p, { src: imageUrl, isUrl: true, purpose: "composition" }]);
-    // Switch to the generate tab
+  const handleAddReference = useCallback((asset) => {
+    setReferenceImages((p) => [...p, { assetId: asset.id, url: asset.url, purpose: asset.purpose || "composition" }]);
     setPage("generate");
   }, []);
 
@@ -120,11 +118,9 @@ export default function App() {
     // Restore the original user prompt
     setPrompt(entry.userPrompt);
 
-    // Restore reference images, preserving purposes if the entry has them
+    // Restore reference images (populated server-side from asset IDs)
     if (entry.referenceImages?.length) {
-      setReferenceImages(entry.referenceImages.map(({ url, purpose }) => ({ src: url, isUrl: true, purpose: purpose || "composition" })));
-    } else if (entry.referenceImageUrls?.length) {
-      setReferenceImages(entry.referenceImageUrls.map((url) => ({ src: url, isUrl: true, purpose: "composition" })));
+      setReferenceImages(entry.referenceImages.map(({ url, purpose }) => ({ url, isUrl: true, purpose: purpose || "composition" })));
     } else {
       setReferenceImages([]);
     }

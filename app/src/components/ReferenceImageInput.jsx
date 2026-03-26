@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { toBase64 } from "../lib/api";
 import { REFERENCE_PURPOSES } from "../lib/constants";
 import { colors, font, radius, fieldInput as FI } from "../theme";
+import { AssetPickerModal } from "./AssetPickerModal";
 
 /**
  * UrlReferenceInput — a small input + button for adding an image by URL.
@@ -100,10 +101,11 @@ function UrlReferenceInput({ onAdd }) {
  * }} props
  */
 export function ReferenceImageInput({ images, onChange }) {
-  // Hidden file input element for click-to-browse
-  const inputRef   = useRef();
-  // True while the user is dragging over the drop zone
-  const [dragging, setDragging] = useState(false);
+  const inputRef      = useRef();
+  const [dragging,    setDragging]    = useState(false);
+  const [showPicker,  setShowPicker]  = useState(false);
+
+  const existingAssetIds = images.filter((i) => i.assetId).map((i) => i.assetId);
 
   const addFiles = async (fileList) => {
     // Convert each File to base64 in parallel
@@ -131,8 +133,21 @@ export function ReferenceImageInput({ images, onChange }) {
     onChange((p) => p.filter((_, j) => j !== i));
   };
 
+  const handlePickAssets = (assets) => {
+    onChange((p) => [...p, ...assets.map((a) => ({ assetId: a.id, url: a.url, purpose: "composition" }))]);
+  };
+
   return (
     <div>
+      {showPicker && (
+        <AssetPickerModal
+          title="Add reference from assets"
+          excludeIds={existingAssetIds}
+          onClose={() => setShowPicker(false)}
+          onSelect={handlePickAssets}
+        />
+      )}
+
       {/* Drop zone / file browser trigger */}
       <div
         onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
@@ -168,8 +183,31 @@ export function ReferenceImageInput({ images, onChange }) {
       </div>
 
       <UrlReferenceInput
-        onAdd={(url) => onChange((p) => [...p, { src: url, isUrl: true, purpose: "composition" }])}
+        onAdd={(url) => onChange((p) => [...p, { url, isUrl: true, purpose: "composition" }])}
       />
+
+      {/* Pick from existing assets */}
+      <button
+        onClick={() => setShowPicker(true)}
+        style={{
+          width:        "100%",
+          padding:      "7px 12px",
+          marginBottom: images.length > 0 ? 10 : 0,
+          background:   "transparent",
+          border:       `1px solid ${colors.borderStrong}`,
+          borderRadius: radius.md,
+          color:        colors.textMuted,
+          fontFamily:   font.mono,
+          fontSize:     font.sizeMd,
+          cursor:       "pointer",
+          textAlign:    "left",
+          transition:   "border-color 0.15s, color 0.15s",
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.borderColor = colors.borderFocus; e.currentTarget.style.color = colors.textMid; }}
+        onMouseLeave={(e) => { e.currentTarget.style.borderColor = colors.borderStrong; e.currentTarget.style.color = colors.textMuted; }}
+      >
+        + From assets library
+      </button>
 
       {/* Image list with purpose selectors */}
       {images.length > 0 && (
@@ -194,8 +232,8 @@ export function ReferenceImageInput({ images, onChange }) {
                 border:       `1px solid #1e1e1e`,
                 position:     "relative",
               }}>
-                <img src={item.src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                {item.isUrl && (
+                <img src={item.url || item.src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                {(item.isUrl || item.assetId) && (
                   <div style={{
                     position:   "absolute",
                     bottom:     1,
@@ -206,7 +244,7 @@ export function ReferenceImageInput({ images, onChange }) {
                     color:      colors.textMuted,
                     fontFamily: font.mono,
                     fontSize:   8,
-                  }}>ref</div>
+                  }}>{item.assetId ? "asset" : "ref"}</div>
                 )}
               </div>
 

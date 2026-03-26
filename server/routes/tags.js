@@ -104,9 +104,6 @@ async function createTagAsset({ tagKey, group, parsed, filename }) {
   const { localPath, assetPath }  = await saveAssetLocally(tagKey, group, filename, parsed.buffer);
   return db.assets.createAsset({
     id:        crypto.randomUUID(),
-    type:      "tag_asset",
-    tagKey,
-    group,
     url:       uploaded.url,
     localPath,
     assetPath,
@@ -212,6 +209,42 @@ router.post("/tags/:key/images", async (req, res) => {
   }
 });
 
+/**
+ * POST /tags/:key/assets/:assetId
+ * Assign an existing (unassigned) asset to a tag group.
+ * Body: { group: "face" | "body" | ... }
+ */
+router.post("/tags/:key/assets/:assetId", async (req, res) => {
+  try {
+    const key     = sanitizeTagKey(req.params.key);
+    const assetId = req.params.assetId;
+    const group   = String(req.body.group || "").trim();
+
+    if (!ASSET_GROUPS.includes(group)) {
+      return res.status(400).json({ error: `group must be one of: ${ASSET_GROUPS.join(", ")}` });
+    }
+
+    const tag   = await db.tags.getTag(key);
+    if (!tag) return res.status(404).json({ error: `tag not found: ${key}` });
+
+    const asset = await db.assets.getAsset(assetId);
+    if (!asset) return res.status(404).json({ error: `asset not found: ${assetId}` });
+
+    const updated = await db.tags.updateTag(key, async (t) => {
+      if (!t.assetIds) t.assetIds = Object.fromEntries(ASSET_GROUPS.map((g) => [g, []]));
+      if (!Array.isArray(t.assetIds[group])) t.assetIds[group] = [];
+      if (!t.assetIds[group].includes(assetId)) t.assetIds[group].push(assetId);
+      t.meta = t.meta || {};
+      t.meta.updatedAt = new Date().toISOString();
+      return t;
+    });
+
+    res.json({ ok: true, tag: serializeTag(await populateTag(updated)) });
+  } catch (error) {
+    res.status(500).json({ error: "failed to assign asset to tag", details: error.message });
+  }
+});
+
 router.delete("/tags/:key/images", async (req, res) => {
   try {
     const key = sanitizeTagKey(req.params.key);
@@ -231,10 +264,7 @@ router.delete("/tags/:key/images", async (req, res) => {
           tag.assetIds[group] = before.filter((id) => !idsToDelete.has(id));
           const removed = before.length - tag.assetIds[group].length;
           if (removed > 0) { deleted[group] = removed; totalDeleted += removed; }
-          // Remove asset records from the assets DB
-          for (const id of before.filter((id) => idsToDelete.has(id))) {
-            await db.assets.deleteAsset(id);
-          }
+          // Asset records are not modified — the tag simply stops referencing them
         } else {
           // Old format fallback
           const before = Array.isArray(tag.assets[group]) ? tag.assets[group] : [];
@@ -259,9 +289,7 @@ router.delete("/tags/:key", async (req, res) => {
     const key    = sanitizeTagKey(req.params.key);
     const dbData = await db.tags.read();
     if (!dbData.tags[key]) return res.status(404).json({ error: `tag not found: ${key}` });
-    // Also remove all asset records for this tag
-    const tagAssets = await db.assets.getAssets({ tagKey: key });
-    await Promise.all(tagAssets.map((a) => db.assets.deleteAsset(a.id)));
+    // Asset records are not modified when a tag is deleted — they remain in the assets DB
     delete dbData.tags[key];
     await db.tags.write(dbData);
     res.json({ ok: true, deleted: key });
