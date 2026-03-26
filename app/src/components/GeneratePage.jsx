@@ -139,25 +139,41 @@ export function GeneratePage({
         <div>
           <label style={FL}>Aspect Ratio</label>
           <div style={{ display: "flex", gap: 6 }}>
-            {ASPECT_RATIOS.map((r) => (
-              <button
-                key={r.label}
-                onClick={() => setAspect(r)}
-                style={{
-                  padding:      "6px 14px",
-                  borderRadius: radius.md - 1,
-                  border:       `1px solid ${aspect.label === r.label ? colors.primary : "#1e1e1e"}`,
-                  background:   aspect.label === r.label ? colors.primary : "transparent",
-                  color:        aspect.label === r.label ? colors.primaryText : colors.textMuted,
-                  fontFamily:   font.mono,
-                  fontSize:     font.sizeMd,
-                  cursor:       "pointer",
-                  transition:   "all 0.15s",
-                }}
-              >
-                {r.label}
-              </button>
-            ))}
+            {ASPECT_RATIOS.map((r) => {
+              const active   = aspect.label === r.label;
+              const maxDim   = 14;
+              const svgW     = r.w >= r.h ? maxDim : Math.round(maxDim * r.w / r.h);
+              const svgH     = r.h >= r.w ? maxDim : Math.round(maxDim * r.h / r.w);
+              return (
+                <button
+                  key={r.label}
+                  onClick={() => setAspect(r)}
+                  style={{
+                    padding:        "6px 14px",
+                    borderRadius:   radius.md - 1,
+                    border:         `1px solid ${active ? colors.primary : "#1e1e1e"}`,
+                    background:     active ? colors.primary : "transparent",
+                    color:          active ? colors.primaryText : colors.textMuted,
+                    fontFamily:     font.mono,
+                    fontSize:       font.sizeMd,
+                    cursor:         "pointer",
+                    transition:     "all 0.15s",
+                    display:        "flex",
+                    alignItems:     "center",
+                    gap:            7,
+                  }}
+                >
+                  <svg width={svgW} height={svgH} viewBox={`0 0 ${svgW} ${svgH}`} style={{ flexShrink: 0 }}>
+                    <rect x={0.5} y={0.5} width={svgW - 1} height={svgH - 1} rx={1}
+                      fill="none"
+                      stroke={active ? colors.primaryText : colors.textMuted}
+                      strokeWidth={1.5}
+                    />
+                  </svg>
+                  {r.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
