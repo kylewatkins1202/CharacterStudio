@@ -3,6 +3,12 @@
  *
  * Generate route:
  *   POST /generate
+ *
+ * Reference images come in three forms:
+ *   referenceAssetIds   — existing asset IDs (picked from asset library)
+ *   referenceImages     — base64 uploads (new photos, creates asset records)
+ *   referenceImageUrls  — pasted URLs; healed if a matching asset exists, used
+ *                         as-is otherwise (no new asset created for bare URLs)
  */
 
 const crypto = require("crypto");
@@ -11,7 +17,7 @@ const db = require("../db");
 const { uploadBufferToWaveSpeed, generateSeedreamEdit } = require("../api/wavespeed");
 const { parseBase64Image } = require("../utils/imageCollage");
 const { extractTags, compilePrompt } = require("../utils/tagCompiler");
-const { healTagAssets, healReferenceItems, saveAssetLocally } = require("../utils/assets");
+const { healTagAssets, healReferenceItems, healAsset, saveAssetLocally } = require("../utils/assets");
 
 const router = express.Router();
 
@@ -22,12 +28,6 @@ const VISION_MODEL = process.env.VISION_MODEL || "google/gemini-2.5-flash";
 
 const COST_PER_MEGAPIXEL = 0.06;
 
-/**
- * Estimate generation cost from a "WxH" size string.
- *
- * @param {string} sizeStr - e.g. "1024*1024"
- * @returns {string|null} Fixed-precision cost string, or null if unparseable.
- */
 function estimateCost(sizeStr) {
   if (!sizeStr) return null;
   const [w, h] = sizeStr.split("*").map(Number);
@@ -35,12 +35,6 @@ function estimateCost(sizeStr) {
   return ((w * h) / 1_000_000 * COST_PER_MEGAPIXEL).toFixed(4);
 }
 
-/**
- * Extract a single image URL from a variety of WaveSpeed result shapes.
- *
- * @param {object} result
- * @returns {string|null}
- */
 function extractImageUrlFromResult(result) {
   if (!result) return null;
   const d = result?.data || result;
@@ -48,7 +42,6 @@ function extractImageUrlFromResult(result) {
     result?.outputs?.[0] || result?.images?.[0] || result?.image_url || result?.url || null;
 }
 
-// Purpose directives injected into the final prompt for each reference image.
 const PURPOSE_DIRECTIVES = {
   composition: {
     singular: "Use image[{n}] as a reference for the overall composition, framing, and subject placement.",
@@ -80,17 +73,18 @@ const PURPOSE_DIRECTIVES = {
 
 router.post("/generate", async (req, res) => {
   try {
-    const prompt            = String(req.body.prompt || "");
-    const size              = req.body.size;
-    const tagLocks          = req.body.tagLocks || {};
-    const enableSyncMode    = req.body.enable_sync_mode !== false;
+    const prompt             = String(req.body.prompt || "");
+    const size               = req.body.size;
+    const tagLocks           = req.body.tagLocks || {};
+    const enableSyncMode     = req.body.enable_sync_mode !== false;
     const enableBase64Output = req.body.enable_base64_output === true;
-    const resetCache        = req.body.resetCache === true;
+    const resetCache         = req.body.resetCache === true;
 
     if (!prompt) return res.status(400).json({ error: "prompt is required" });
 
+    // ── Tag compilation ────────────────────────────────────────────────────
     const tagKeys = extractTags(prompt);
-    // Heal stale CDN URLs before compilation — re-uploads from local copies as needed
+    // healTagAssets takes raw DB tags (assetIds format), heals + populates them
     const tagList = await healTagAssets(await db.tags.getTags(tagKeys));
 
     let compiled;
@@ -117,52 +111,64 @@ router.post("/generate", async (req, res) => {
       }
     }
 
-    // Collect raw base64 and URL reference images from the request
-    const rawReferenceImages = Array.isArray(req.body.referenceImages) ? req.body.referenceImages : [];
-    const rawReferenceUrls   = Array.isArray(req.body.referenceImageUrls) ? req.body.referenceImageUrls : [];
+    // ── Reference images ───────────────────────────────────────────────────
 
-    // Upload base64 items, save locally, and register as reference assets
-    const uploadedBase64 = await Promise.all(
-      rawReferenceImages.map(async (item, i) => {
-        const b64     = typeof item === "string" ? item : item.data;
+    // 1. Existing asset ID refs — resolve and heal
+    const rawAssetIdRefs = Array.isArray(req.body.referenceAssetIds) ? req.body.referenceAssetIds : [];
+    const assetIdItems = (await Promise.all(
+      rawAssetIdRefs.map(async (item) => {
+        const assetId = typeof item === "string" ? item : item.id;
         const purpose = (typeof item === "object" && item.purpose) ? item.purpose : "composition";
-        const parsed  = parseBase64Image(b64);
+        const asset   = await db.assets.getAsset(assetId);
+        if (!asset) return null;
+        const healed  = await healAsset(asset);
+        return healed ? { id: healed.id, url: healed.url, purpose } : null;
+      })
+    )).filter(Boolean);
+
+    // 2. Base64 uploads — new photos: upload, save locally, create asset record
+    const rawReferenceImages = Array.isArray(req.body.referenceImages) ? req.body.referenceImages : [];
+    const base64Items = await Promise.all(
+      rawReferenceImages.map(async (item, i) => {
+        const b64      = typeof item === "string" ? item : item.data;
+        const purpose  = (typeof item === "object" && item.purpose) ? item.purpose : "composition";
+        const parsed   = parseBase64Image(b64);
         const filename = `ref-${Date.now()}-${i}.${parsed.ext}`;
         const uploaded = await uploadBufferToWaveSpeed(parsed.buffer, filename, parsed.mimeType);
-        // Binary saved to disk; only metadata goes into the assets DB
         const { localPath, assetPath } = await saveAssetLocally("refs", "reference", filename, parsed.buffer);
-        await db.assets.createAsset({
+        const asset = await db.assets.createAsset({
           id:        crypto.randomUUID(),
-          type:      "reference",
           url:       uploaded.url,
           localPath,
           assetPath,
           filename,
           mimeType:  parsed.mimeType,
           purpose,
-          timestamp: new Date().toISOString(),
           hidden:    false,
+          timestamp: new Date().toISOString(),
         });
-        return { url: uploaded.url, purpose };
+        return { id: asset.id, url: uploaded.url, purpose };
       })
     );
 
-    // Normalise URL items to { url, purpose } and heal any stale CDN URLs
-    const rawUrlItems = rawReferenceUrls.map(item =>
+    // 3. Pasted URL refs — heal if a known asset, use as-is otherwise (no new asset)
+    const rawReferenceUrls = Array.isArray(req.body.referenceImageUrls) ? req.body.referenceImageUrls : [];
+    const rawUrlItems = rawReferenceUrls.map((item) =>
       typeof item === "string"
         ? { url: item, purpose: "composition" }
         : { url: item.url, purpose: item.purpose || "composition" }
     );
-    const uploadedUrlItems = await healReferenceItems(rawUrlItems);
+    const urlItems = await healReferenceItems(rawUrlItems);
 
-    const allReferenceItems    = [...uploadedUrlItems, ...uploadedBase64];
-    const uploadedReferenceUrls = allReferenceItems.map(item => item.url);
+    const allReferenceItems     = [...assetIdItems, ...base64Items, ...urlItems];
+    const referenceAssetIds     = allReferenceItems.map((i) => i.id).filter(Boolean);
+    const uploadedReferenceUrls = allReferenceItems.map((i) => i.url);
 
+    // ── Prompt assembly ────────────────────────────────────────────────────
     let finalPrompt = compiled?.rawPrompt ?? prompt;
 
-    // Append per-image purpose directives to the final prompt
     if (allReferenceItems.length > 0) {
-      const characterCount = (compiled?.parsedPlan?.characters ?? tagList.filter(t => t.type === "character")).length;
+      const characterCount = (compiled?.parsedPlan?.characters ?? tagList.filter((t) => t.type === "character")).length;
       const isPlural  = characterCount > 1;
       const baseIndex = (compiled?.images ?? []).length;
 
@@ -180,6 +186,7 @@ router.post("/generate", async (req, res) => {
     compiled.images.push(...uploadedReferenceUrls);
     compiled.rawPrompt = finalPrompt;
 
+    // ── Generation ─────────────────────────────────────────────────────────
     const result = await generateSeedreamEdit({
       images:             compiled.images,
       prompt:             compiled.rawPrompt,
@@ -188,20 +195,49 @@ router.post("/generate", async (req, res) => {
       enableBase64Output
     });
 
-    // Persist to gallery
+    // ── Persist generated image as an asset ────────────────────────────────
+    // The generated image is a new photo entering the system — save locally and register.
     const imageUrl = extractImageUrlFromResult(result);
+    let imageAssetId = null;
+
+    if (imageUrl) {
+      try {
+        const imgRes = await fetch(imageUrl);
+        if (imgRes.ok) {
+          const buffer      = Buffer.from(await imgRes.arrayBuffer());
+          const contentType = imgRes.headers.get("content-type") || "image/jpeg";
+          const ext         = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
+          const filename    = `generated-${Date.now()}.${ext}`;
+          const { localPath, assetPath } = await saveAssetLocally("generated", "result", filename, buffer);
+          const imageAsset = await db.assets.createAsset({
+            id:        crypto.randomUUID(),
+            url:       imageUrl,
+            localPath,
+            assetPath,
+            filename,
+            mimeType:  contentType,
+            hidden:    false,
+            timestamp: new Date().toISOString(),
+          });
+          imageAssetId = imageAsset.id;
+        }
+      } catch (err) {
+        console.warn(`[generate] failed to save generated image locally: ${err.message}`);
+      }
+    }
+
+    // ── Persist to gallery ─────────────────────────────────────────────────
     if (imageUrl) {
       await db.gallery.saveGalleryEntry({
-        id:                  crypto.randomUUID(),
-        imageUrl,
-        userPrompt:          prompt,
-        compiledPrompt:      compiled?.rawPrompt || null,
-        compiledImages:      compiled?.images || [],
-        referenceImageUrls:  uploadedReferenceUrls,
-        referenceImages:     allReferenceItems.map(({ url, purpose }) => ({ url, purpose })),
-        size:                size || null,
-        cost:                estimateCost(size),
-        timestamp:           new Date().toISOString(),
+        id:               crypto.randomUUID(),
+        imageAssetId,
+        referenceAssetIds,
+        userPrompt:       prompt,
+        compiledPrompt:   compiled?.rawPrompt || null,
+        compiledImages:   compiled?.images || [],
+        size:             size || null,
+        cost:             estimateCost(size),
+        timestamp:        new Date().toISOString(),
       });
     }
 

@@ -1,20 +1,13 @@
 /**
  * db/assets.js
  *
- * Assets table — canonical store for every uploaded image in the system.
+ * Assets table — canonical store for every image in the system.
  *
- * Each record has a stable UUID. Tags reference assets by ID rather than
- * embedding the full record, so healing a URL only touches this table.
+ * Assets are context-agnostic. Who uses an asset is tracked externally:
+ *   - Tags store `assetIds` keyed by group
+ *   - Gallery entries store `imageAssetId` and `referenceAssetIds`
  *
- * Asset types:
- *   "tag_asset"  — an image belonging to a tag (face, body, outfit, etc.)
- *   "reference"  — a reference image used during generation
- *
- * Record shape:
- *   { id, type, url, localPath, filename, mimeType, hidden, timestamp,
- *     tagKey?, group?,   // for tag_asset
- *     purpose?           // for reference
- *   }
+ * Record shape: { id, url, localPath, assetPath, filename, mimeType, hidden, timestamp, purpose? }
  */
 
 const DbTable = require("./DbTable");
@@ -27,11 +20,7 @@ class AssetsTable extends DbTable {
     this.declaration = { assets: {} };
   }
 
-  /**
-   * Save a new asset record. Caller is responsible for supplying a unique id.
-   * @param {object} data
-   * @returns {Promise<object>}
-   */
+  /** Save a new asset record. Caller supplies a unique id. */
   async createAsset(data) {
     const db = await this.read();
     db.assets[data.id] = data;
@@ -39,58 +28,36 @@ class AssetsTable extends DbTable {
     return data;
   }
 
-  /**
-   * Get a single asset by id, or null if not found.
-   * @param {string} id
-   * @returns {Promise<object|null>}
-   */
+  /** Get a single asset by id, or null. */
   async getAsset(id) {
     const db = await this.read();
     return db.assets[id] || null;
   }
 
   /**
-   * Get all assets, optionally filtered.
-   * @param {{ type?: string, tagKey?: string, hidden?: boolean }} [filter={}]
-   * @returns {Promise<object[]>}
+   * Get all assets, optionally filtered by hidden state.
+   * @param {{ hidden?: boolean }} [filter={}]
    */
   async getAssets(filter = {}) {
     const db   = await this.read();
     let   list = Object.values(db.assets);
-    if (filter.type   !== undefined) list = list.filter((a) => a.type   === filter.type);
-    if (filter.tagKey !== undefined) list = list.filter((a) => a.tagKey === filter.tagKey);
     if (filter.hidden !== undefined) list = list.filter((a) => Boolean(a.hidden) === filter.hidden);
-    // Newest first
     return list.sort((a, b) => (b.timestamp || "").localeCompare(a.timestamp || ""));
   }
 
-  /**
-   * Fetch multiple assets by their ids. Missing ids are silently omitted.
-   * @param {string[]} ids
-   * @returns {Promise<object[]>}
-   */
+  /** Fetch multiple assets by their ids. Missing ids are silently omitted. */
   async getAssetsByIds(ids) {
     const db = await this.read();
     return ids.map((id) => db.assets[id]).filter(Boolean);
   }
 
-  /**
-   * Find the first asset whose `url` matches exactly, or null.
-   * Used by healing to look up a stale URL's local copy.
-   * @param {string} url
-   * @returns {Promise<object|null>}
-   */
+  /** Find the first asset whose `url` matches exactly, or null. */
   async getAssetByUrl(url) {
     const db = await this.read();
     return Object.values(db.assets).find((a) => a.url === url) || null;
   }
 
-  /**
-   * Patch an asset record. Only the provided keys are updated.
-   * @param {string} id
-   * @param {object} patch
-   * @returns {Promise<object|null>}
-   */
+  /** Patch an asset record. Only the provided keys are updated. */
   async updateAsset(id, patch) {
     const db = await this.read();
     if (!db.assets[id]) return null;
@@ -101,15 +68,15 @@ class AssetsTable extends DbTable {
 
   /**
    * Delete an asset record.
-   * @param {string} id
-   * @returns {Promise<boolean>} True if something was deleted.
+   * @returns {Promise<object|null>} The deleted record, or null if not found.
    */
   async deleteAsset(id) {
     const db = await this.read();
-    if (!db.assets[id]) return false;
+    const record = db.assets[id];
+    if (!record) return null;
     delete db.assets[id];
     await this.write(db);
-    return true;
+    return record;
   }
 }
 

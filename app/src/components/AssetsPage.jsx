@@ -1,22 +1,53 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "../lib/api";
 import { colors, font } from "../theme";
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Icons ────────────────────────────────────────────────────────────────────
 
-/**
- * Build a fallback local URL for an asset in case the CDN URL has expired.
- * Uses the stored assetPath (relative to ASSETS_DIR) if available, so the
- * URL matches exactly where the binary was saved regardless of type.
- */
+function EyeIcon({ open }) {
+  return open ? (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+      <circle cx="12" cy="12" r="3"/>
+    </svg>
+  ) : (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+      <line x1="1" y1="1" x2="23" y2="23"/>
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 6 5 6 21 6"/>
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+      <path d="M10 11v6M14 11v6"/>
+      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+    </svg>
+  );
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 function localUrl(asset) {
   if (!asset.assetPath) return null;
   return "/api/assets/" + asset.assetPath.split("/").map(encodeURIComponent).join("/");
 }
 
+function fileToBase64(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => resolve(e.target.result);
+    reader.readAsDataURL(file);
+  });
+}
+
 // ─── AssetThumb ───────────────────────────────────────────────────────────────
 
-function AssetThumb({ asset, size = 150 }) {
+function AssetThumb({ asset, size = 180 }) {
   const fallback = localUrl(asset);
   return (
     <img
@@ -41,7 +72,22 @@ function AssetThumb({ asset, size = 150 }) {
 
 // ─── AssetCard ────────────────────────────────────────────────────────────────
 
-function AssetCard({ asset, label, useLabel, header, onUse, onToggleHidden }) {
+function AssetCard({ asset, onUse, onToggleHidden, onDelete }) {
+  const iconBtn = {
+    padding:        "4px 7px",
+    background:     "transparent",
+    border:         `1px solid ${colors.border}`,
+    borderRadius:   5,
+    color:          colors.textMuted,
+    cursor:         "pointer",
+    display:        "flex",
+    alignItems:     "center",
+    justifyContent: "center",
+  };
+
+  // Build a human-readable label from whatever context fields exist
+  const label = asset.purpose || asset.group || asset.filename?.split("-")[0] || "asset";
+
   return (
     <div style={{
       background:    colors.surface,
@@ -53,13 +99,7 @@ function AssetCard({ asset, label, useLabel, header, onUse, onToggleHidden }) {
       opacity:       asset.hidden ? 0.5 : 1,
       transition:    "opacity 0.2s",
     }}>
-      <AssetThumb asset={asset} size={180} />
-
-      {header && (
-        <div style={{ fontFamily: font.mono, fontSize: 12, color: colors.textMid, padding: "6px 10px 0" }}>
-          {"@" + header}
-        </div>
-      )}
+      <AssetThumb asset={asset} />
 
       <div style={{ padding: "8px 10px", display: "flex", flexDirection: "column", gap: 6 }}>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -70,6 +110,10 @@ function AssetCard({ asset, label, useLabel, header, onUse, onToggleHidden }) {
             background:   colors.borderMid,
             borderRadius: 4,
             padding:      "2px 6px",
+            maxWidth:     "100%",
+            overflow:     "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace:   "nowrap",
           }}>
             {label}
           </span>
@@ -84,9 +128,9 @@ function AssetCard({ asset, label, useLabel, header, onUse, onToggleHidden }) {
           </div>
         )}
 
-        <div style={{ display: "flex", gap: 6 }}>
+        <div style={{ display: "flex", gap: 5 }}>
           <button
-            onClick={() => onUse(asset.url)}
+            onClick={() => onUse(asset)}
             style={{
               flex:         1,
               padding:      "4px 0",
@@ -99,23 +143,13 @@ function AssetCard({ asset, label, useLabel, header, onUse, onToggleHidden }) {
               cursor:       "pointer",
             }}
           >
-            {useLabel}
+            Use as ref
           </button>
-          <button
-            onClick={() => onToggleHidden(asset)}
-            title={asset.hidden ? "Show" : "Hide"}
-            style={{
-              padding:      "4px 8px",
-              background:   "transparent",
-              border:       `1px solid ${colors.border}`,
-              borderRadius: 5,
-              color:        colors.textMuted,
-              fontFamily:   font.mono,
-              fontSize:     11,
-              cursor:       "pointer",
-            }}
-          >
-            {asset.hidden ? "Show" : "Hide"}
+          <button onClick={() => onToggleHidden(asset)} title={asset.hidden ? "Show" : "Hide"} style={iconBtn}>
+            <EyeIcon open={!asset.hidden} />
+          </button>
+          <button onClick={() => onDelete(asset)} title="Delete" style={{ ...iconBtn, color: "#c04040" }}>
+            <TrashIcon />
           </button>
         </div>
       </div>
@@ -123,22 +157,62 @@ function AssetCard({ asset, label, useLabel, header, onUse, onToggleHidden }) {
   );
 }
 
+// ─── UploadZone ───────────────────────────────────────────────────────────────
+
+function UploadZone({ onFiles, uploading }) {
+  const inputRef = useRef(null);
+  const [dragging, setDragging] = useState(false);
+
+  const handleFiles = (files) => {
+    const images = Array.from(files).filter((f) => f.type.startsWith("image/"));
+    if (images.length) onFiles(images);
+  };
+
+  return (
+    <div
+      onClick={() => inputRef.current?.click()}
+      onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={(e) => { e.preventDefault(); setDragging(false); handleFiles(e.dataTransfer.files); }}
+      style={{
+        border:       `2px dashed ${dragging ? colors.primary : colors.border}`,
+        borderRadius: 8,
+        padding:      "20px 16px",
+        textAlign:    "center",
+        cursor:       uploading ? "not-allowed" : "pointer",
+        color:        dragging ? colors.primary : colors.textGhost,
+        fontFamily:   font.mono,
+        fontSize:     12,
+        transition:   "all 0.2s",
+        background:   dragging ? `${colors.primary}08` : "transparent",
+        marginBottom: 20,
+      }}
+    >
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        style={{ display: "none" }}
+        onChange={(e) => handleFiles(e.target.files)}
+      />
+      {uploading ? "Uploading…" : "Click or drag images to upload new assets"}
+    </div>
+  );
+}
+
 // ─── AssetsPage ───────────────────────────────────────────────────────────────
 
 export function AssetsPage({ toast, onAddReference }) {
-  const [refs,       setRefs]       = useState([]);
-  const [tagAssets,  setTagAssets]  = useState([]);
+  const [assets,     setAssets]     = useState([]);
   const [loading,    setLoading]    = useState(true);
+  const [uploading,  setUploading]  = useState(false);
   const [showHidden, setShowHidden] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [refRes, tagRes] = await Promise.all([
-        api.get("/assets?type=reference"),
-        api.get("/assets?type=tag_asset"),
-      ]);
-      if (refRes.ok)  setRefs(refRes.assets);
-      if (tagRes.ok)  setTagAssets(tagRes.assets);
+      const res = await api.get("/assets");
+      if (res.ok) setAssets(res.assets);
     } catch {
       toast.add("Failed to load assets", "error");
     }
@@ -151,42 +225,41 @@ export function AssetsPage({ toast, onAddReference }) {
     try {
       const res = await api.patch(`/assets/${asset.id}`, { hidden: !asset.hidden });
       if (!res.ok) { toast.add(res.error || "Update failed", "error"); return; }
-
-      const update = (list) => list.map((a) => a.id === asset.id ? { ...a, hidden: !asset.hidden } : a);
-      if (asset.type === "reference") setRefs(update);
-      else setTagAssets(update);
+      setAssets((prev) => prev.map((a) => a.id === asset.id ? { ...a, hidden: !asset.hidden } : a));
     } catch {
       toast.add("Network error", "error");
     }
   };
 
-  const visibleRefs      = refs.filter((a)      => showHidden || !a.hidden);
-  const visibleTagAssets = tagAssets.filter((a) => showHidden || !a.hidden);
+  const handleDelete = async (asset) => {
+    try {
+      const res = await api.delete(`/assets/${asset.id}`);
+      if (!res.ok) { toast.add(res.error || "Delete failed", "error"); return; }
+      setAssets((prev) => prev.filter((a) => a.id !== asset.id));
+      toast.add("Asset deleted", "success");
+    } catch {
+      toast.add("Network error", "error");
+    }
+  };
 
-  // Group tag assets by tagKey for display
-  const byTag = visibleTagAssets.reduce((acc, asset) => {
-    const key = asset.tagKey || "unknown";
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(asset);
-    return acc;
-  }, {});
+  const handleUpload = async (files) => {
+    setUploading(true);
+    try {
+      const images = await Promise.all(files.map(fileToBase64));
+      const res = await api.post("/assets", { images });
+      if (res.ok) {
+        setAssets((prev) => [...res.assets, ...prev]);
+        toast.add(`${res.assets.length} asset${res.assets.length !== 1 ? "s" : ""} uploaded`, "success");
+      } else {
+        toast.add(res.error || "Upload failed", "error");
+      }
+    } catch {
+      toast.add("Upload failed", "error");
+    }
+    setUploading(false);
+  };
 
-  const sectionHeader = (title, count) => (
-    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-      <h2 style={{
-        margin:        0,
-        fontFamily:    font.mono,
-        fontSize:      14,
-        fontWeight:    600,
-        color:         colors.textMid,
-        letterSpacing: "0.04em",
-        textTransform: "uppercase",
-      }}>
-        {title}
-      </h2>
-      <span style={{ fontFamily: font.mono, fontSize: 11, color: colors.textMuted }}>{count}</span>
-    </div>
-  );
+  const visible = assets.filter((a) => showHidden || !a.hidden);
 
   if (loading) {
     return (
@@ -199,80 +272,59 @@ export function AssetsPage({ toast, onAddReference }) {
   return (
     <div style={{ padding: "32px 28px", maxWidth: 1400, margin: "0 auto" }}>
 
-      {/* ── References ──────────────────────────────────────────────────────── */}
-      <div style={{ marginBottom: 48 }}>
-        <div style={{ display: "flex", alignItems: "center", marginBottom: 16 }}>
-          {sectionHeader("References", visibleRefs.length)}
-          <button
-            onClick={() => setShowHidden((v) => !v)}
-            style={{
-              marginLeft:   "auto",
-              padding:      "4px 12px",
-              background:   showHidden ? colors.borderMid : "transparent",
-              border:       `1px solid ${colors.border}`,
-              borderRadius: 6,
-              color:        colors.textMuted,
-              fontFamily:   font.mono,
-              fontSize:     11,
-              cursor:       "pointer",
-            }}
-          >
-            {showHidden ? "Hide hidden" : "Show hidden"}
-          </button>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
+        <h2 style={{
+          margin:        0,
+          fontFamily:    font.mono,
+          fontSize:      14,
+          fontWeight:    600,
+          color:         colors.textMid,
+          letterSpacing: "0.04em",
+          textTransform: "uppercase",
+        }}>
+          Assets
+        </h2>
+        <span style={{ fontFamily: font.mono, fontSize: 11, color: colors.textMuted }}>{visible.length}</span>
+        <button
+          onClick={() => setShowHidden((v) => !v)}
+          style={{
+            marginLeft:   "auto",
+            padding:      "4px 12px",
+            background:   showHidden ? colors.borderMid : "transparent",
+            border:       `1px solid ${colors.border}`,
+            borderRadius: 6,
+            color:        colors.textMuted,
+            fontFamily:   font.mono,
+            fontSize:     11,
+            cursor:       "pointer",
+          }}
+        >
+          {showHidden ? "Hide hidden" : "Show hidden"}
+        </button>
+      </div>
+
+      <UploadZone onFiles={handleUpload} uploading={uploading} />
+
+      {visible.length === 0 ? (
+        <p style={{ fontFamily: font.mono, fontSize: 12, color: colors.textGhost, margin: 0 }}>
+          {assets.length === 0
+            ? "No assets yet. Upload images above or generate images to populate this page."
+            : "No assets to show."}
+        </p>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12 }}>
+          {visible.map((asset) => (
+            <AssetCard
+              key={asset.id}
+              asset={asset}
+              onUse={onAddReference}
+              onToggleHidden={handleToggleHidden}
+              onDelete={handleDelete}
+            />
+          ))}
         </div>
-
-        {visibleRefs.length === 0 ? (
-          <p style={{ fontFamily: font.mono, fontSize: 12, color: colors.textGhost, margin: 0 }}>
-            {refs.length === 0
-              ? "No references yet. Generate images with reference photos to populate this section."
-              : "No references to show."}
-          </p>
-        ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: 12 }}>
-            {visibleRefs.map((asset) => (
-              <AssetCard
-                key={asset.id}
-                asset={asset}
-                label={asset.purpose || "composition"}
-                useLabel="Use"
-                onUse={onAddReference}
-                onToggleHidden={handleToggleHidden}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* ── Tag Assets ──────────────────────────────────────────────────────── */}
-      <div>
-        {sectionHeader("Tag Assets", visibleTagAssets.length)}
-
-        {Object.keys(byTag).length === 0 ? (
-          <p style={{ fontFamily: font.mono, fontSize: 12, color: colors.textGhost, margin: 0 }}>
-            No tag assets yet.
-          </p>
-        ) : (
-          <div style={{ marginBottom: 28 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 10 }}>
-              {
-                Object.entries(byTag).map(([tagKey, assets]) => (
-                    assets.map((asset) => (
-                    <AssetCard
-                      key={asset.id}
-                      asset={asset}
-                      label={asset.group}
-                      useLabel="Use as ref"
-                      header={tagKey}
-                      onUse={onAddReference}
-                      onToggleHidden={handleToggleHidden}
-                    />
-                  ))
-                ))
-              }
-          </div>
-            </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }
