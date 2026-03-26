@@ -8,11 +8,13 @@ import { GeneratePage } from "./components/GeneratePage";
 import { GalleryPage } from "./components/GalleryPage";
 import { TagsPage } from "./components/TagsPage";
 import { SettingsModal } from "./components/SettingsModal";
+import { AssetsPage } from "./components/AssetsPage";
 
 const NAV_TABS = [
   ["generate", "Generate"],
   ["gallery",  null],   // label computed below to include count badge
   ["tags",     "Tags"],
+  ["assets",   "Assets"],
 ];
 
 /**
@@ -118,12 +120,14 @@ export default function App() {
     // Restore the original user prompt
     setPrompt(entry.userPrompt);
 
-    // Restore reference images if the entry recorded any
-    setReferenceImages(
-      entry.referenceImageUrls?.length
-        ? entry.referenceImageUrls.map((url) => ({ src: url, isUrl: true, purpose: "composition" }))
-        : []
-    );
+    // Restore reference images, preserving purposes if the entry has them
+    if (entry.referenceImages?.length) {
+      setReferenceImages(entry.referenceImages.map(({ url, purpose }) => ({ src: url, isUrl: true, purpose: purpose || "composition" })));
+    } else if (entry.referenceImageUrls?.length) {
+      setReferenceImages(entry.referenceImageUrls.map((url) => ({ src: url, isUrl: true, purpose: "composition" })));
+    } else {
+      setReferenceImages([]);
+    }
 
     // Restore aspect ratio and base size from the recorded size string (e.g. "1024*1024")
     if (entry.size) {
@@ -270,6 +274,10 @@ export default function App() {
       <div style={{ display: page === "tags" ? "block" : "none" }}>
         <TagsPage tags={tags} onTagsChange={loadTags} toast={toast} />
       </div>
+
+      {page === "assets" && (
+        <AssetsPage toast={toast} onAddReference={handleAddReference} />
+      )}
 
       <Toast toasts={toast.toasts} remove={toast.remove} />
     </>

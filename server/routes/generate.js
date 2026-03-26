@@ -11,7 +11,7 @@ const db = require("../db");
 const { uploadBufferToWaveSpeed, generateSeedreamEdit } = require("../api/wavespeed");
 const { parseBase64Image } = require("../utils/imageCollage");
 const { extractTags, compilePrompt } = require("../utils/tagCompiler");
-const { healTagAssets } = require("../utils/assets");
+const { healTagAssets, healReferenceItems, saveAssetLocally } = require("../utils/assets");
 
 const router = express.Router();
 
@@ -121,7 +121,7 @@ router.post("/generate", async (req, res) => {
     const rawReferenceImages = Array.isArray(req.body.referenceImages) ? req.body.referenceImages : [];
     const rawReferenceUrls   = Array.isArray(req.body.referenceImageUrls) ? req.body.referenceImageUrls : [];
 
-    // Upload base64 items, keeping their purpose alongside the URL
+    // Upload base64 items, save locally, and register as reference assets
     const uploadedBase64 = await Promise.all(
       rawReferenceImages.map(async (item, i) => {
         const b64     = typeof item === "string" ? item : item.data;
@@ -129,16 +129,31 @@ router.post("/generate", async (req, res) => {
         const parsed  = parseBase64Image(b64);
         const filename = `ref-${Date.now()}-${i}.${parsed.ext}`;
         const uploaded = await uploadBufferToWaveSpeed(parsed.buffer, filename, parsed.mimeType);
+        // Binary saved to disk; only metadata goes into the assets DB
+        const { localPath, assetPath } = await saveAssetLocally("refs", "reference", filename, parsed.buffer);
+        await db.assets.createAsset({
+          id:        crypto.randomUUID(),
+          type:      "reference",
+          url:       uploaded.url,
+          localPath,
+          assetPath,
+          filename,
+          mimeType:  parsed.mimeType,
+          purpose,
+          timestamp: new Date().toISOString(),
+          hidden:    false,
+        });
         return { url: uploaded.url, purpose };
       })
     );
 
-    // Normalise URL items to { url, purpose }
-    const uploadedUrlItems = rawReferenceUrls.map(item =>
+    // Normalise URL items to { url, purpose } and heal any stale CDN URLs
+    const rawUrlItems = rawReferenceUrls.map(item =>
       typeof item === "string"
         ? { url: item, purpose: "composition" }
         : { url: item.url, purpose: item.purpose || "composition" }
     );
+    const uploadedUrlItems = await healReferenceItems(rawUrlItems);
 
     const allReferenceItems    = [...uploadedUrlItems, ...uploadedBase64];
     const uploadedReferenceUrls = allReferenceItems.map(item => item.url);
@@ -183,6 +198,7 @@ router.post("/generate", async (req, res) => {
         compiledPrompt:      compiled?.rawPrompt || null,
         compiledImages:      compiled?.images || [],
         referenceImageUrls:  uploadedReferenceUrls,
+        referenceImages:     allReferenceItems.map(({ url, purpose }) => ({ url, purpose })),
         size:                size || null,
         cost:                estimateCost(size),
         timestamp:           new Date().toISOString(),

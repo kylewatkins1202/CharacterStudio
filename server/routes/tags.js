@@ -8,32 +8,30 @@
  *   POST   /tags/:key/images
  *   DELETE /tags/:key/images
  *   DELETE /tags/:key
+ *
+ * Tags store asset references by ID (assetIds) rather than embedding full
+ * asset objects. All mutations create/delete records in db.assets and keep
+ * assetIds in sync. GET routes populate assets from the assets table before
+ * responding, so callers always receive the familiar `assets: { group: [...] }`
+ * shape.
+ *
+ * Backward compat: tags that still carry embedded `assets` objects (written
+ * before this refactor) are returned as-is; the populate helper detects the
+ * format automatically.
  */
 
-const crypto = require("crypto");
-const fs     = require("fs/promises");
-const path   = require("path");
+const crypto  = require("crypto");
 const express = require("express");
-const db = require("../db");
+const db      = require("../db");
 const { uploadBufferToWaveSpeed } = require("../api/wavespeed");
 const { sanitizeTagKey, parseBase64Image } = require("../utils/imageCollage");
 const { TAG_TYPES, ASSET_GROUPS, buildTagRecord } = require("../utils/tagCompiler");
+const { saveAssetLocally } = require("../utils/assets");
 
 const router = express.Router();
 
-// Whether to persist the raw image buffer alongside the URL.
-const STORE_BUFFERS = process.env.STORE_BUFFERS === "true";
-
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-/**
- * Generate a plain-text description for non-character tags that have no
- * explicit description yet.
- *
- * @param {string} type
- * @param {string} key
- * @returns {string}
- */
 function makeBasicDescription(type, key) {
   if (type === "location" || type === "prop" || type === "outfit") {
     return key.replace(/[-_]/g, " ");
@@ -41,19 +39,11 @@ function makeBasicDescription(type, key) {
   return "";
 }
 
-/**
- * Merge incoming description fields from the request body into the tag's
- * lock object, applying a fallback basic description when needed.
- *
- * @param {object} tag
- * @param {object} body - req.body
- * @returns {object} Updated lock object.
- */
 function mergeTagLockDescriptions(tag, body) {
   const nextLock = { ...(tag.lock || {}) };
-  if (typeof body.basicDescription === "string") nextLock.basicDescription = body.basicDescription.trim();
+  if (typeof body.basicDescription     === "string") nextLock.basicDescription     = body.basicDescription.trim();
   if (typeof body.appearanceDescription === "string") nextLock.appearanceDescription = body.appearanceDescription.trim();
-  if (typeof body.bodyDescription === "string") nextLock.bodyDescription = body.bodyDescription.trim();
+  if (typeof body.bodyDescription      === "string") nextLock.bodyDescription      = body.bodyDescription.trim();
   if (!nextLock.basicDescription && tag.type !== "character") {
     nextLock.basicDescription = makeBasicDescription(tag.type, tag.key);
   }
@@ -61,8 +51,33 @@ function mergeTagLockDescriptions(tag, body) {
 }
 
 /**
- * Strip raw image buffers from a tag before sending it to the client.
+ * Populate a tag's `assets` field from the assets DB using stored IDs.
  *
+ * If the tag already has embedded assets (old format, no assetIds) it is
+ * returned as-is for backward compatibility.
+ *
+ * @param {object|null} tag
+ * @returns {Promise<object|null>}
+ */
+async function populateTag(tag) {
+  if (!tag) return null;
+  // Old format — assets are embedded directly; nothing to resolve
+  if (!tag.assetIds) return tag;
+
+  const allIds  = Object.values(tag.assetIds).flat().filter(Boolean);
+  const fetched = await db.assets.getAssetsByIds(allIds);
+  const byId    = Object.fromEntries(fetched.map((a) => [a.id, a]));
+
+  const assets = {};
+  for (const [group, ids] of Object.entries(tag.assetIds)) {
+    assets[group] = ids.map((id) => byId[id]).filter(Boolean);
+  }
+
+  return { ...tag, assets };
+}
+
+/**
+ * Strip raw buffer fields from a populated tag before sending to the client.
  * @param {object|null} tag
  * @returns {object|null}
  */
@@ -73,79 +88,66 @@ function serializeTag(tag) {
     assets: Object.fromEntries(
       Object.entries(tag.assets || {}).map(([group, items]) => [
         group,
-        Array.isArray(items) ? items.map(({ buffer, ...rest }) => rest) : []
+        Array.isArray(items) ? items.map(({ buffer, ...rest }) => rest) : [],
       ])
-    )
+    ),
   };
 }
 
 /**
- * Build a stored-asset record from an uploaded file.
- *
- * @param {object} options
- * @param {{ url: string }} options.uploaded
- * @param {string}          options.filename
- * @param {string}          options.mimeType
- * @param {Buffer}          options.buffer
- * @param {string}          [options.source]
- * @returns {object}
+ * Upload an image, save it locally, register it in the assets DB, and
+ * return the asset record. The caller appends `asset.id` to the tag's
+ * assetIds.
  */
-/**
- * Save an image buffer to the local assets directory for future re-upload
- * if the WaveSpeed CDN URL expires.
- *
- * Path: ASSETS_DIR/{tagKey}/{group}/{filename}
- *
- * @param {string} tagKey
- * @param {string} group
- * @param {string} filename
- * @param {Buffer} buffer
- * @returns {Promise<string>} Absolute local path.
- */
-async function saveAssetLocally(tagKey, group, filename, buffer) {
-  const dir = path.join(db.ASSETS_DIR, tagKey, group);
-  // Ensure per-tag per-group directory exists
-  await fs.mkdir(dir, { recursive: true });
-  const localPath = path.join(dir, filename);
-  await fs.writeFile(localPath, buffer);
-  return localPath;
-}
-
-function createStoredAsset({ uploaded, filename, mimeType, buffer, source = "base64", localPath = null }) {
-  return {
-    id: crypto.randomUUID(),
-    url: uploaded.url,
-    filename,
-    mimeType,
-    source,
-    // Absolute path to the local copy — used to re-upload if the CDN URL expires
+async function createTagAsset({ tagKey, group, parsed, filename }) {
+  const uploaded                  = await uploadBufferToWaveSpeed(parsed.buffer, filename, parsed.mimeType);
+  const { localPath, assetPath }  = await saveAssetLocally(tagKey, group, filename, parsed.buffer);
+  return db.assets.createAsset({
+    id:        crypto.randomUUID(),
+    type:      "tag_asset",
+    tagKey,
+    group,
+    url:       uploaded.url,
     localPath,
-    ...(STORE_BUFFERS && { buffer })
-  };
+    assetPath,
+    filename,
+    mimeType:  parsed.mimeType,
+    hidden:    false,
+    timestamp: new Date().toISOString(),
+  });
 }
 
 // ─── Routes ──────────────────────────────────────────────────────────────────
 
 router.post("/tag", async (req, res) => {
   try {
-    const key = sanitizeTagKey(req.body.key);
+    const key  = sanitizeTagKey(req.body.key);
     const type = String(req.body.type || "").trim().toLowerCase();
 
     if (!key) return res.status(400).json({ error: "key is required" });
     if (!TAG_TYPES.includes(type)) return res.status(400).json({ error: `type must be one of: ${TAG_TYPES.join(", ")}` });
 
     const existingTag = await db.tags.getTag(key);
+    // buildTagRecord initialises the legacy `assets` shape; we'll convert below
     const tag = buildTagRecord({ key, type, existingTag });
     tag.lock = mergeTagLockDescriptions(tag, req.body);
 
+    // Migrate embedded assets to assetIds on first edit if needed
+    if (!tag.assetIds) {
+      tag.assetIds = Object.fromEntries(
+        ASSET_GROUPS.map((g) => [g, (tag.assets?.[g] || []).map((a) => a.id).filter(Boolean)])
+      );
+    }
+    delete tag.assets; // no longer stored on the tag record
+
     for (const group of ASSET_GROUPS) {
       const rawImages = Array.isArray(req.body[group]) ? req.body[group] : [];
-      for (let index = 0; index < rawImages.length; index += 1) {
-        const parsed = parseBase64Image(rawImages[index]);
-        const filename = `${key}-${group}-${Date.now()}-${index}.${parsed.ext}`;
-        const uploaded  = await uploadBufferToWaveSpeed(parsed.buffer, filename, parsed.mimeType);
-        const localPath = await saveAssetLocally(key, group, filename, parsed.buffer);
-        tag.assets[group].push(createStoredAsset({ uploaded, filename, mimeType: parsed.mimeType, buffer: parsed.buffer, localPath }));
+      for (let i = 0; i < rawImages.length; i++) {
+        const parsed   = parseBase64Image(rawImages[i]);
+        const filename = `${key}-${group}-${Date.now()}-${i}.${parsed.ext}`;
+        const asset    = await createTagAsset({ tagKey: key, group, parsed, filename });
+        if (!Array.isArray(tag.assetIds[group])) tag.assetIds[group] = [];
+        tag.assetIds[group].push(asset.id);
       }
     }
 
@@ -155,7 +157,7 @@ router.post("/tag", async (req, res) => {
     tag.meta.updatedAt = now;
     await db.tags.saveTag(tag);
 
-    res.json({ ok: true, tag: serializeTag(tag) });
+    res.json({ ok: true, tag: serializeTag(await populateTag(tag)) });
   } catch (error) {
     res.status(500).json({ error: "failed to create/update tag", details: error.message });
   }
@@ -163,8 +165,9 @@ router.post("/tag", async (req, res) => {
 
 router.get("/tags", async (req, res) => {
   try {
-    const tagList = await db.tags.searchTags(String(req.query.key || "").trim());
-    res.json({ ok: true, count: tagList.length, tags: tagList.map(serializeTag) });
+    const tagList    = await db.tags.searchTags(String(req.query.key || "").trim());
+    const populated  = await Promise.all(tagList.map(populateTag));
+    res.json({ ok: true, count: populated.length, tags: populated.map(serializeTag) });
   } catch (error) {
     res.status(500).json({ error: "failed to fetch tags", details: error.message });
   }
@@ -174,7 +177,7 @@ router.get("/tags/:key", async (req, res) => {
   try {
     const tag = await db.tags.getTag(sanitizeTagKey(req.params.key));
     if (!tag) return res.status(404).json({ error: `tag not found: ${req.params.key}` });
-    res.json({ ok: true, tag: serializeTag(tag) });
+    res.json({ ok: true, tag: serializeTag(await populateTag(tag)) });
   } catch (error) {
     res.status(500).json({ error: "failed to fetch tag", details: error.message });
   }
@@ -186,14 +189,16 @@ router.post("/tags/:key/images", async (req, res) => {
     if (!await db.tags.getTag(key)) return res.status(404).json({ error: `tag not found: ${key}` });
 
     const updated = await db.tags.updateTag(key, async (tag) => {
+      if (!tag.assetIds) tag.assetIds = Object.fromEntries(ASSET_GROUPS.map((g) => [g, []]));
+
       for (const group of ASSET_GROUPS) {
         const rawImages = Array.isArray(req.body[group]) ? req.body[group] : [];
-        for (let index = 0; index < rawImages.length; index += 1) {
-          const parsed = parseBase64Image(rawImages[index]);
-          const filename  = `${key}-${group}-${Date.now()}-${index}.${parsed.ext}`;
-          const uploaded  = await uploadBufferToWaveSpeed(parsed.buffer, filename, parsed.mimeType);
-          const localPath = await saveAssetLocally(key, group, filename, parsed.buffer);
-          tag.assets[group].push(createStoredAsset({ uploaded, filename, mimeType: parsed.mimeType, buffer: parsed.buffer, localPath }));
+        for (let i = 0; i < rawImages.length; i++) {
+          const parsed   = parseBase64Image(rawImages[i]);
+          const filename = `${key}-${group}-${Date.now()}-${i}.${parsed.ext}`;
+          const asset    = await createTagAsset({ tagKey: key, group, parsed, filename });
+          if (!Array.isArray(tag.assetIds[group])) tag.assetIds[group] = [];
+          tag.assetIds[group].push(asset.id);
         }
       }
       tag.meta = tag.meta || {};
@@ -201,7 +206,7 @@ router.post("/tags/:key/images", async (req, res) => {
       return tag;
     });
 
-    res.json({ ok: true, tag: serializeTag(updated) });
+    res.json({ ok: true, tag: serializeTag(await populateTag(updated)) });
   } catch (error) {
     res.status(500).json({ error: "failed to add images to tag", details: error.message });
   }
@@ -216,21 +221,34 @@ router.delete("/tags/:key/images", async (req, res) => {
     let totalDeleted = 0;
 
     const updated = await db.tags.updateTag(key, async (tag) => {
-      for (const group of ASSET_GROUPS) {
+      const groups = Object.keys(tag.assetIds || tag.assets || {});
+      for (const group of groups) {
         const idsToDelete = new Set(Array.isArray(req.body[group]) ? req.body[group].map(String) : []);
         if (!idsToDelete.size) continue;
-        const before = Array.isArray(tag.assets[group]) ? tag.assets[group] : [];
-        const after = before.filter((a) => !idsToDelete.has(String(a.id || "")));
-        const removed = before.length - after.length;
-        if (removed > 0) { deleted[group] = removed; totalDeleted += removed; }
-        tag.assets[group] = after;
+
+        if (tag.assetIds) {
+          const before = tag.assetIds[group] || [];
+          tag.assetIds[group] = before.filter((id) => !idsToDelete.has(id));
+          const removed = before.length - tag.assetIds[group].length;
+          if (removed > 0) { deleted[group] = removed; totalDeleted += removed; }
+          // Remove asset records from the assets DB
+          for (const id of before.filter((id) => idsToDelete.has(id))) {
+            await db.assets.deleteAsset(id);
+          }
+        } else {
+          // Old format fallback
+          const before = Array.isArray(tag.assets[group]) ? tag.assets[group] : [];
+          tag.assets[group] = before.filter((a) => !idsToDelete.has(String(a.id || "")));
+          const removed = before.length - tag.assets[group].length;
+          if (removed > 0) { deleted[group] = removed; totalDeleted += removed; }
+        }
       }
       tag.meta = tag.meta || {};
       tag.meta.updatedAt = new Date().toISOString();
       return tag;
     });
 
-    res.json({ ok: true, totalDeleted, deleted, tag: serializeTag(updated) });
+    res.json({ ok: true, totalDeleted, deleted, tag: serializeTag(await populateTag(updated)) });
   } catch (error) {
     res.status(500).json({ error: "failed to delete images from tag", details: error.message });
   }
@@ -238,11 +256,14 @@ router.delete("/tags/:key/images", async (req, res) => {
 
 router.delete("/tags/:key", async (req, res) => {
   try {
-    const key = sanitizeTagKey(req.params.key);
-    const dbTags = await db.tags.read();
-    if (!dbTags.tags[key]) return res.status(404).json({ error: `tag not found: ${key}` });
-    delete dbTags.tags[key];
-    await db.tags.write(dbTags);
+    const key    = sanitizeTagKey(req.params.key);
+    const dbData = await db.tags.read();
+    if (!dbData.tags[key]) return res.status(404).json({ error: `tag not found: ${key}` });
+    // Also remove all asset records for this tag
+    const tagAssets = await db.assets.getAssets({ tagKey: key });
+    await Promise.all(tagAssets.map((a) => db.assets.deleteAsset(a.id)));
+    delete dbData.tags[key];
+    await db.tags.write(dbData);
     res.json({ ok: true, deleted: key });
   } catch (error) {
     res.status(500).json({ error: "failed to delete tag", details: error.message });

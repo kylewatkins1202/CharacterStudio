@@ -34,8 +34,11 @@ const CACHE_PATH      = path.join(DATA_DIR, "prompt_cache.json")
 // Path to the user settings file
 const SETTINGS_PATH   = path.join(DATA_DIR, "settings.json")
 
-// Directory where tag asset images are stored locally (for re-upload if CDN URL expires)
+// Directory where asset images are stored locally (for re-upload if CDN URL expires)
 const ASSETS_DIR      = path.join(DATA_DIR, "assets")
+
+// Path to the assets database (canonical store for all tag and reference assets)
+const ASSETS_DB_PATH  = path.join(DATA_DIR, "assets.json")
 
 // Directory where locally downloaded gallery images are saved.
 const DOWNLOADS_DIR = path.join(DATA_DIR, "downloads");
@@ -47,5 +50,6 @@ module.exports = {
   DOWNLOADS_DIR,
   CACHE_PATH,
   SETTINGS_PATH,
-  ASSETS_DIR
+  ASSETS_DIR,
+  ASSETS_DB_PATH,
 };

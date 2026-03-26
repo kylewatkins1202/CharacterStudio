@@ -18,6 +18,7 @@ const tags     = require("./tags");
 const gallery  = require("./gallery");
 const cache    = require("./cache");
 const settings = require("./settings");
+const assets   = require("./assets");
 
 /**
  * Initialize the data directory and all database tables.
@@ -41,6 +42,7 @@ async function setupDb() {
   await gallery.ensureDbTable();
   await cache.ensureDbTable();
   await settings.ensureDbTable();
+  await assets.ensureDbTable();
 }
 
 module.exports = {
@@ -56,4 +58,5 @@ module.exports = {
   gallery,
   cache,
   settings,
+  assets,
 };
