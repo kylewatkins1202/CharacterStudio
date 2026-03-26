@@ -14,9 +14,10 @@ const fs      = require("fs/promises");
 const { DATA_DIR, DOWNLOADS_DIR } = require("./core");
 
 // Singleton table instances
-const tags    = require("./tags");
-const gallery = require("./gallery");
-const cache   = require("./cache");
+const tags     = require("./tags");
+const gallery  = require("./gallery");
+const cache    = require("./cache");
+const settings = require("./settings");
 
 /**
  * Initialize the data directory and all database tables.
@@ -37,6 +38,7 @@ async function setupDb() {
   await tags.ensureDbTable();
   await gallery.ensureDbTable();
   await cache.ensureDbTable();
+  await settings.ensureDbTable();
 }
 
 module.exports = {
@@ -50,4 +52,5 @@ module.exports = {
   tags,
   gallery,
   cache,
+  settings,
 };

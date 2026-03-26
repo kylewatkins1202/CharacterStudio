@@ -7,6 +7,7 @@ import { useToast, Toast } from "./components/Toast";
 import { GeneratePage } from "./components/GeneratePage";
 import { GalleryPage } from "./components/GalleryPage";
 import { TagsPage } from "./components/TagsPage";
+import { SettingsModal } from "./components/SettingsModal";
 
 const NAV_TABS = [
   ["generate", "Generate"],
@@ -26,6 +27,8 @@ const NAV_TABS = [
 export default function App() {
   // Active tab: "generate" | "gallery" | "tags"
   const [page,         setPage]         = useState("generate");
+  // Whether the settings modal is open
+  const [settingsOpen, setSettingsOpen] = useState(false);
   // All tags fetched from the API
   const [tags,         setTags]         = useState([]);
   // Number of gallery entries — drives the nav badge label
@@ -212,7 +215,28 @@ export default function App() {
         <div style={{ color: colors.borderMid, fontFamily: font.mono, fontSize: font.sizeSm }}>
           {tags.length} tag{tags.length !== 1 ? "s" : ""}
         </div>
+        {/* Gear icon — opens settings modal */}
+        <button
+          onClick={() => setSettingsOpen(true)}
+          style={{
+            background:  "none",
+            border:      "none",
+            color:       colors.textMuted,
+            cursor:      "pointer",
+            fontSize:    18,
+            padding:     "4px 6px",
+            lineHeight:  1,
+            borderRadius: 6,
+          }}
+          title="Settings"
+        >
+          ⚙
+        </button>
       </nav>
+
+      {settingsOpen && (
+        <SettingsModal onClose={() => setSettingsOpen(false)} toast={toast} />
+      )}
 
       {/*
         Generate and Tags stay mounted (display:none) to preserve state across tab switches.
