@@ -1,142 +1,181 @@
 /**
  * utils/assets.js
  *
- * Tag asset URL healing.
+ * Asset storage and URL healing.
  *
- * WaveSpeed CDN URLs expire after some period. When a tag asset's URL is
- * no longer reachable, this module re-uploads the image from the locally
- * saved copy and writes the new URL back to the database.
+ * All healing now operates on the assets DB (db.assets) rather than on the
+ * tags or a special _refs tag. Tags reference assets by ID, so healing a URL
+ * only requires updating the asset record — no tag writes needed.
  *
- * Assets uploaded before local storage was introduced have no localPath
- * and cannot be healed — they are silently removed from the asset array
- * so the rest of the tag still works.
+ * The assets DB stores only metadata (id, url, localPath, filename, etc.).
+ * Binary image files live in ASSETS_DIR on disk; localPath is the pointer.
  *
- * Usage:
- *   const { healTagAssets } = require("./utils/assets");
- *   const healedTags = await healTagAssets(tagList);
+ * Exports:
+ *   saveAssetLocally(tagKey, group, filename, buffer) → localPath
+ *   healAsset(asset)                                 → healed asset | null
+ *   healTagAssets(populatedTags)                     → healed populated tags
+ *   healReferenceItems(items)                        → healed { url, purpose }[]
  */
 
 const fs   = require("fs/promises");
+const path = require("path");
 const db   = require("../db");
 const { uploadBufferToWaveSpeed } = require("../api/wavespeed");
 
-// Per-session cache of known-good URLs — avoids redundant HEAD checks
-// while the server is running.
+// Per-session cache of known-good URLs — avoids redundant HEAD checks.
 const verifiedUrls = new Set();
+
+// ─── URL reachability ─────────────────────────────────────────────────────────
 
 /**
  * Check whether a URL is currently reachable via a HEAD request.
- *
- * Results are cached in `verifiedUrls` for the lifetime of the process
- * so each URL is only checked once per server session.
+ * Results are cached in `verifiedUrls` for the process lifetime.
  *
  * @param {string} url
  * @returns {Promise<boolean>}
  */
 async function isUrlReachable(url) {
-  // Skip the network check if we already confirmed this URL is good
   if (verifiedUrls.has(url)) return true;
   try {
     const res = await fetch(url, { method: "HEAD" });
-    if (res.ok) {
-      // Cache the positive result
-      verifiedUrls.add(url);
-      return true;
-    }
+    if (res.ok) { verifiedUrls.add(url); return true; }
     return false;
   } catch {
-    // Network error — treat as unreachable
     return false;
   }
 }
 
+// ─── Local storage ────────────────────────────────────────────────────────────
+
+/**
+ * Save an image buffer to the local assets directory on disk.
+ * The DB stores only the returned localPath — the binary never enters the DB.
+ *
+ * Path: ASSETS_DIR/{tagKey}/{group}/{filename}
+ *
+ * @param {string} tagKey  - Tag key, or a virtual namespace (e.g. "refs")
+ * @param {string} group   - Asset group (e.g. "face", "reference")
+ * @param {string} filename
+ * @param {Buffer} buffer
+ * @returns {Promise<string>} Absolute local path to the saved file.
+ */
+/**
+ * Save an image buffer to the local assets directory on disk.
+ * Returns both the absolute localPath (for fs reads) and the assetPath
+ * (relative to ASSETS_DIR, forward-slash separated) used to build the
+ * /api/assets/… fallback URL.
+ */
+async function saveAssetLocally(tagKey, group, filename, buffer) {
+  const dir       = path.join(db.ASSETS_DIR, tagKey, group);
+  await fs.mkdir(dir, { recursive: true });
+  const localPath = path.join(dir, filename);
+  await fs.writeFile(localPath, buffer);
+  const assetPath = `${tagKey}/${group}/${filename}`;
+  return { localPath, assetPath };
+}
+
+// ─── Healing ─────────────────────────────────────────────────────────────────
+
 /**
  * Attempt to heal a single asset whose CDN URL may have expired.
  *
- * - If the URL is still reachable, the original asset is returned unchanged.
- * - If the URL is stale and the asset has a `localPath`, the file is read
- *   from disk, re-uploaded to WaveSpeed, and the asset is returned with the
- *   new URL.
- * - If the URL is stale and there is no `localPath`, null is returned so the
- *   caller can filter the asset out.
+ * - URL still good  → return asset unchanged.
+ * - URL stale + localPath → read binary from disk, re-upload to WaveSpeed,
+ *                           update only the `url` field in the assets DB,
+ *                           return healed asset.
+ * - URL stale + no localPath → return null (unrecoverable).
  *
- * @param {object} asset
+ * @param {object} asset - Full asset record from db.assets.
  * @returns {Promise<object|null>}
  */
 async function healAsset(asset) {
   if (!asset?.url) return null;
-  // URL is still good — nothing to do
   if (await isUrlReachable(asset.url)) return asset;
 
   if (!asset.localPath) {
-    // No local copy — asset is unrecoverable
     console.warn(`[assets] stale URL with no local copy: ${asset.filename || asset.url}`);
     return null;
   }
 
   try {
-    // Read the locally saved file and re-upload it
+    // Read the binary from the local file — not from the DB
     const buffer   = await fs.readFile(asset.localPath);
     const uploaded = await uploadBufferToWaveSpeed(buffer, asset.filename, asset.mimeType);
-    // Cache the fresh URL so it isn't re-checked this session
     verifiedUrls.add(uploaded.url);
     console.log(`[assets] re-uploaded ${asset.filename} → ${uploaded.url}`);
-    return { ...asset, url: uploaded.url };
+
+    // Only the URL changes in the assets DB; the file on disk is untouched
+    const healed = await db.assets.updateAsset(asset.id, { url: uploaded.url });
+    return healed || { ...asset, url: uploaded.url };
   } catch (err) {
     console.warn(`[assets] failed to re-upload ${asset.filename}: ${err.message}`);
-    // Return null so the caller can skip this asset gracefully
     return null;
   }
 }
 
 /**
- * Heal all assets across a list of tags.
+ * Heal all assets across a list of already-populated tags.
  *
- * For each tag, every asset group is checked concurrently. Any asset whose
- * URL was re-uploaded is replaced with the updated record. If any URLs
- * changed the tag is persisted to the database.
+ * For each tag, every asset in every group is checked. Stale URLs are
+ * re-uploaded from the local file on disk and the assets DB is updated.
+ * Unrecoverable assets (no localPath) are dropped from the group so
+ * compilation still proceeds with the remaining valid ones.
  *
- * Assets that are unrecoverable (stale URL + no local copy) are removed
- * from the group array so compilation can still proceed with the remaining
- * valid assets.
- *
- * @param {object[]} tags
- * @returns {Promise<object[]>} Tags with all reachable (possibly freshly uploaded) asset URLs.
+ * @param {object[]} tags - Tags with `assets` already populated (not assetIds).
+ * @returns {Promise<object[]>}
  */
 async function healTagAssets(tags) {
-  const healed = [];
-
-  for (const tag of tags) {
-    const groups    = Object.keys(tag.assets || {});
+  return Promise.all(tags.map(async (tag) => {
+    const groups     = Object.keys(tag.assets || {});
     const nextAssets = {};
-    let changed = false;
 
     for (const group of groups) {
-      const originals = Array.isArray(tag.assets[group]) ? tag.assets[group] : [];
-      // Check all assets in this group concurrently
-      const fixed = (await Promise.all(originals.map(healAsset))).filter(Boolean);
+      const originals   = Array.isArray(tag.assets[group]) ? tag.assets[group] : [];
+      const fixed       = (await Promise.all(originals.map(healAsset))).filter(Boolean);
       nextAssets[group] = fixed;
-      // Flag if any URL changed or any asset was removed
-      if (
-        fixed.length !== originals.length ||
-        fixed.some((a, i) => a.url !== originals[i]?.url)
-      ) {
-        changed = true;
-      }
     }
 
-    if (changed) {
-      const updatedTag = { ...tag, assets: nextAssets };
-      // Persist the updated URLs so future runs don't re-upload unnecessarily
-      await db.tags.saveTag(updatedTag);
-      console.log(`[assets] healed tag: ${tag.key}`);
-      healed.push(updatedTag);
-    } else {
-      healed.push(tag);
-    }
-  }
-
-  return healed;
+    return { ...tag, assets: nextAssets };
+  }));
 }
 
-module.exports = { healTagAssets };
+/**
+ * Heal a list of reference image items `{ url, purpose }` whose WaveSpeed
+ * URLs may have expired.
+ *
+ * For each stale URL, looks up the corresponding asset record in the assets DB
+ * by URL to find localPath, reads the binary from disk, re-uploads to
+ * WaveSpeed, and updates only the `url` field in the assets DB.
+ *
+ * @param {Array<{ url: string, purpose: string }>} items
+ * @returns {Promise<Array<{ url: string, purpose: string }>>}
+ */
+async function healReferenceItems(items) {
+  if (!items.length) return items;
+
+  return Promise.all(items.map(async (item) => {
+    if (await isUrlReachable(item.url)) return item;
+
+    const asset = await db.assets.getAssetByUrl(item.url);
+    if (!asset?.localPath) {
+      console.warn(`[assets] stale ref URL with no local copy: ${item.url}`);
+      return item;
+    }
+
+    try {
+      // Read binary from disk, not from the DB
+      const buffer   = await fs.readFile(asset.localPath);
+      const uploaded = await uploadBufferToWaveSpeed(buffer, asset.filename, asset.mimeType);
+      verifiedUrls.add(uploaded.url);
+      console.log(`[assets] re-uploaded ref ${asset.filename} → ${uploaded.url}`);
+      // Only the URL field is updated in the assets DB
+      await db.assets.updateAsset(asset.id, { url: uploaded.url });
+      return { ...item, url: uploaded.url };
+    } catch (err) {
+      console.warn(`[assets] failed to re-upload ref: ${err.message}`);
+      return item;
+    }
+  }));
+}
+
+module.exports = { saveAssetLocally, healAsset, healTagAssets, healReferenceItems };
