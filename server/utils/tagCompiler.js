@@ -38,7 +38,7 @@ const {
     callAnyLLM,
     callAnyLLMVision,
     extractLLMText
-} = require("../wavespeed")
+} = require("../api/wavespeed")
 
 /** Maximum number of input images supported by the current Seedream edit flow. */
 const MODEL_MAX_IMAGES = 10

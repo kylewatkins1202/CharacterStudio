@@ -9,10 +9,10 @@
  * - Extracting the text payload from a WaveSpeed LLM response
  */
 
-/** @typedef {import('./types').WaveSpeedUploadResult} WaveSpeedUploadResult */
-/** @typedef {import('./types').SeedreamEditOptions} SeedreamEditOptions */
-/** @typedef {import('./types').AnyLLMOptions} AnyLLMOptions */
-/** @typedef {import('./types').AnyLLMVisionOptions} AnyLLMVisionOptions */
+/** @typedef {import('../types').WaveSpeedUploadResult} WaveSpeedUploadResult */
+/** @typedef {import('../types').SeedreamEditOptions} SeedreamEditOptions */
+/** @typedef {import('../types').AnyLLMOptions} AnyLLMOptions */
+/** @typedef {import('../types').AnyLLMVisionOptions} AnyLLMVisionOptions */
 
 const axios = require("axios")
 const FormData = require("form-data")
