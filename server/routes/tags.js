@@ -13,7 +13,7 @@
 const crypto = require("crypto");
 const express = require("express");
 const db = require("../db");
-const { uploadBufferToWaveSpeed } = require("../wavespeed");
+const { uploadBufferToWaveSpeed } = require("../api/wavespeed");
 const { sanitizeTagKey, parseBase64Image } = require("../utils/imageCollage");
 const { TAG_TYPES, ASSET_GROUPS, buildTagRecord } = require("../utils/tagCompiler");
 

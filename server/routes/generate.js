@@ -8,7 +8,7 @@
 const crypto = require("crypto");
 const express = require("express");
 const db = require("../db");
-const { uploadBufferToWaveSpeed, generateSeedreamEdit } = require("../wavespeed");
+const { uploadBufferToWaveSpeed, generateSeedreamEdit } = require("../api/wavespeed");
 const { parseBase64Image } = require("../utils/imageCollage");
 const { extractTags, compilePrompt } = require("../utils/tagCompiler");
 
