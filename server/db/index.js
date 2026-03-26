@@ -11,7 +11,7 @@
  */
 
 const fs      = require("fs/promises");
-const { DATA_DIR, DOWNLOADS_DIR } = require("./core");
+const { DATA_DIR, DOWNLOADS_DIR, ASSETS_DIR } = require("./core");
 
 // Singleton table instances
 const tags     = require("./tags");
@@ -34,6 +34,8 @@ async function setupDb() {
   await fs.mkdir(DATA_DIR, { recursive: true });
   // Create the downloads sub-directory
   await fs.mkdir(DOWNLOADS_DIR, { recursive: true });
+  // Create the tag asset storage directory
+  await fs.mkdir(ASSETS_DIR, { recursive: true });
   // Seed each table's JSON file if it doesn't already exist
   await tags.ensureDbTable();
   await gallery.ensureDbTable();
@@ -47,6 +49,7 @@ module.exports = {
   // ─── Path constants ────────────────────────────────────────────────────────
   DATA_DIR,
   DOWNLOADS_DIR,
+  ASSETS_DIR,
 
   // ─── Table singletons ──────────────────────────────────────────────────────
   tags,

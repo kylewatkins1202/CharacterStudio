@@ -11,6 +11,8 @@
  */
 
 const crypto = require("crypto");
+const fs     = require("fs/promises");
+const path   = require("path");
 const express = require("express");
 const db = require("../db");
 const { uploadBufferToWaveSpeed } = require("../api/wavespeed");
@@ -88,13 +90,36 @@ function serializeTag(tag) {
  * @param {string}          [options.source]
  * @returns {object}
  */
-function createStoredAsset({ uploaded, filename, mimeType, buffer, source = "base64" }) {
+/**
+ * Save an image buffer to the local assets directory for future re-upload
+ * if the WaveSpeed CDN URL expires.
+ *
+ * Path: ASSETS_DIR/{tagKey}/{group}/{filename}
+ *
+ * @param {string} tagKey
+ * @param {string} group
+ * @param {string} filename
+ * @param {Buffer} buffer
+ * @returns {Promise<string>} Absolute local path.
+ */
+async function saveAssetLocally(tagKey, group, filename, buffer) {
+  const dir = path.join(db.ASSETS_DIR, tagKey, group);
+  // Ensure per-tag per-group directory exists
+  await fs.mkdir(dir, { recursive: true });
+  const localPath = path.join(dir, filename);
+  await fs.writeFile(localPath, buffer);
+  return localPath;
+}
+
+function createStoredAsset({ uploaded, filename, mimeType, buffer, source = "base64", localPath = null }) {
   return {
     id: crypto.randomUUID(),
     url: uploaded.url,
     filename,
     mimeType,
     source,
+    // Absolute path to the local copy — used to re-upload if the CDN URL expires
+    localPath,
     ...(STORE_BUFFERS && { buffer })
   };
 }
@@ -118,8 +143,9 @@ router.post("/tag", async (req, res) => {
       for (let index = 0; index < rawImages.length; index += 1) {
         const parsed = parseBase64Image(rawImages[index]);
         const filename = `${key}-${group}-${Date.now()}-${index}.${parsed.ext}`;
-        const uploaded = await uploadBufferToWaveSpeed(parsed.buffer, filename, parsed.mimeType);
-        tag.assets[group].push(createStoredAsset({ uploaded, filename, mimeType: parsed.mimeType, buffer: parsed.buffer }));
+        const uploaded  = await uploadBufferToWaveSpeed(parsed.buffer, filename, parsed.mimeType);
+        const localPath = await saveAssetLocally(key, group, filename, parsed.buffer);
+        tag.assets[group].push(createStoredAsset({ uploaded, filename, mimeType: parsed.mimeType, buffer: parsed.buffer, localPath }));
       }
     }
 
@@ -164,9 +190,10 @@ router.post("/tags/:key/images", async (req, res) => {
         const rawImages = Array.isArray(req.body[group]) ? req.body[group] : [];
         for (let index = 0; index < rawImages.length; index += 1) {
           const parsed = parseBase64Image(rawImages[index]);
-          const filename = `${key}-${group}-${Date.now()}-${index}.${parsed.ext}`;
-          const uploaded = await uploadBufferToWaveSpeed(parsed.buffer, filename, parsed.mimeType);
-          tag.assets[group].push(createStoredAsset({ uploaded, filename, mimeType: parsed.mimeType, buffer: parsed.buffer }));
+          const filename  = `${key}-${group}-${Date.now()}-${index}.${parsed.ext}`;
+          const uploaded  = await uploadBufferToWaveSpeed(parsed.buffer, filename, parsed.mimeType);
+          const localPath = await saveAssetLocally(key, group, filename, parsed.buffer);
+          tag.assets[group].push(createStoredAsset({ uploaded, filename, mimeType: parsed.mimeType, buffer: parsed.buffer, localPath }));
         }
       }
       tag.meta = tag.meta || {};

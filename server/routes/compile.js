@@ -8,6 +8,7 @@
 const express = require("express");
 const db = require("../db");
 const { extractTags, compilePrompt } = require("../utils/tagCompiler");
+const { healTagAssets } = require("../utils/assets");
 
 const router = express.Router();
 
@@ -20,7 +21,8 @@ router.post("/compile", async (req, res) => {
     if (!prompt) return res.status(400).json({ error: "prompt is required" });
 
     const tagKeys = extractTags(prompt);
-    const tagList = await db.tags.getTags(tagKeys);
+    // Heal stale CDN URLs before compilation — re-uploads from local copies as needed
+    const tagList = await healTagAssets(await db.tags.getTags(tagKeys));
 
     const compiled = await compilePrompt({
       prompt, tags: tagList,
