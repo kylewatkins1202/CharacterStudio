@@ -1,6 +1,76 @@
 {
   "entries": [
     {
+      "id": "ab8aed7c-8cf0-4024-96d1-8bba6079fa6c",
+      "imageAssetId": "410e57c5-a88b-492c-b2b4-fd9210c9f24c",
+      "referenceAssetIds": [
+        "89c1f299-9891-41fb-a346-0c7a0a296ff3"
+      ],
+      "userPrompt": "A dramatic cinematic far shot of a woman standing with her arms in the air. she is wearing underwear and bra. dime lit, dramatic lighting, dark room, shadow over half of her face. @jess is the woman",
+      "compiledPrompt": "A dramatic cinematic far shot of a woman standing with her arms in the air. dime lit, dramatic lighting, dark room, shadow over half of her face.\n\n\n\nUse image[1] exclusively for the woman, arms in the air wearing underwear and bra.\n\nUse image[2] exclusively for the body shape of the woman.\n\n\n\nEach person is a completely distinct individual. Do not mix or merge facial features, hair, or appearance between subjects\n\nUse image[3] as a reference for the visual style, lighting mood, and color grade.",
+      "compiledImages": [
+        "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774489800317245431_YdnwGPZ9.png",
+        "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774428223527034627_5MEOV6fo.jpg",
+        "https://d1q70pf5vjeyhc.cloudfront.net/predictions/f80f79bcc09b43fa885ba7ba0106ca59/1.jpeg"
+      ],
+      "size": "2880*5120",
+      "cost": "0.8847",
+      "timestamp": "2026-03-26T06:39:38.434Z"
+    },
+    {
+      "id": "a6fafbf5-8082-4feb-8bf8-67ec79176415",
+      "imageAssetId": "89c1f299-9891-41fb-a346-0c7a0a296ff3",
+      "referenceAssetIds": [
+        "5a4c9deb-0604-467c-a639-1f2301ae63d2"
+      ],
+      "userPrompt": "A dramatic cinematic far shot of @alba-pink standing with her arms in the air. she is wearing underwear and bra and a thin waste. dime lit, dramatic lighting, dark room, shadow over half of her face",
+      "compiledPrompt": "A dramatic cinematic far shot of, dime lit, dramatic lighting, dark room, shadow over half of her face\n\n\n\nUse image[1] exclusively for Alba, with her arms in the air. with a thin waste wearing underwear and bra.\n\nUse image[2] exclusively for the body shape of Alba.\n\n\n\nEach person is a completely distinct individual. Do not mix or merge facial features, hair, or appearance between subjects\n\nUse image[3] as a reference for the overall composition, framing, and subject placement.",
+      "compiledImages": [
+        "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774047759161130838_ddVKalCZ.jpg",
+        "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774428223527034627_5MEOV6fo.jpg",
+        "https://d1q70pf5vjeyhc.cloudfront.net/predictions/1ced2201f226445fb37c7be8ad4449c1/1.jpeg"
+      ],
+      "size": "2496*4416",
+      "cost": "0.6613",
+      "timestamp": "2026-03-26T06:29:28.714Z"
+    },
+    {
+      "id": "ce65a81b-11d9-4ed5-8f47-52700f3205ea",
+      "imageAssetId": "91eca1eb-4819-42e4-825e-65420e839c31",
+      "referenceAssetIds": [
+        "a5d96a29-235e-40d8-83a9-ac905d68f1ab"
+      ],
+      "userPrompt": "a man and woman on a motorcycle. @s  is the woman. @k is the man",
+      "compiledPrompt": "a man and woman on a motorcycle.\n\n\n\nUse image[1] exclusively for the woman.\n\nUse image[2] exclusively for the man.\n\nUse image[3] exclusively for the body shape of the man.\n\n\n\nEach person is a completely distinct individual. Do not mix or merge facial features, hair, or appearance between subjects\n\nUse image[4] as a reference for the overall composition, framing, and placement of all subjects.",
+      "compiledImages": [
+        "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774505856205064578_dPeowGPZ.jpg",
+        "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774429508354271718_QENW6GQZ.jpg",
+        "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774429509444513320_B0sCLU4e.jpg",
+        "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774493323285807341_sTt2dx3u.png"
+      ],
+      "size": "3584*2688",
+      "cost": "0.5780",
+      "timestamp": "2026-03-26T06:22:01.223Z"
+    },
+    {
+      "id": "47cf86e8-4530-4f0a-8900-70b17990bb12",
+      "imageAssetId": "92da04e8-7f2a-4fd0-8f43-bd702a21cf0b",
+      "referenceAssetIds": [
+        "a5d96a29-235e-40d8-83a9-ac905d68f1ab"
+      ],
+      "userPrompt": "a man and woman on a motorcycle. @s  is the woman. @k is the man",
+      "compiledPrompt": "a man and woman on a motorcycle.\n\n\n\nUse image[1] exclusively for the woman.\n\nUse image[2] exclusively for the man.\n\nUse image[3] exclusively for the body shape of the man.\n\n\n\nEach person is a completely distinct individual. Do not mix or merge facial features, hair, or appearance between subjects\n\nUse image[4] as a reference for the visual style, lighting mood, and color grade across all subjects.",
+      "compiledImages": [
+        "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774505856205064578_dPeowGPZ.jpg",
+        "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774429508354271718_QENW6GQZ.jpg",
+        "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774429509444513320_B0sCLU4e.jpg",
+        "https://d1q70pf5vjeyhc.cloudfront.net/media/3a909838d5f64d16b103a93ead87112c/images/1774493323285807341_sTt2dx3u.png"
+      ],
+      "size": "3584*2688",
+      "cost": "0.5780",
+      "timestamp": "2026-03-26T06:20:19.507Z"
+    },
+    {
       "id": "e9d6cb70-74b4-4471-b264-780788dc901e",
       "imageAssetId": "5a4c9deb-0604-467c-a639-1f2301ae63d2",
       "referenceAssetIds": [],
@@ -183,55 +253,6 @@
       "size": "2048*2048",
       "cost": "0.2517",
       "timestamp": "2026-03-26T05:23:39.680Z"
-    },
-    {
-      "id": "5e826182-6af7-41f4-b170-b0684aa1f470",
-      "imageUrl": "https://d1q70pf5vjeyhc.cloudfront.net/predictions/59d1c05ce9ab4873bacece6d1476712d/1.jpeg",
-      "userPrompt": "A far shot of @alba standing with her arms in the air",
-      "compiledPrompt": "A far shot of\n\n\n\n\n\nEach person is a completely distinct individual. Do not mix or merge facial features, hair, or appearance between subjects",
-      "compiledImages": [],
-      "referenceImageUrls": [],
-      "referenceImages": [],
-      "size": "2048*2048",
-      "cost": "0.2517",
-      "timestamp": "2026-03-26T03:53:12.001Z"
-    },
-    {
-      "id": "56df6b84-c4ec-46c4-b3e5-18e5ec7289a5",
-      "imageUrl": "https://d1q70pf5vjeyhc.cloudfront.net/predictions/e46cf58af0c1405cb9963522c4fa3268/1.jpeg",
-      "userPrompt": "A far shot of woman she is standing with her arms in the air\n@alba is the woman standing in the distance",
-      "compiledPrompt": "A far shot of woman she is standing with her arms in the air\n\n\n\n\n\nEach person is a completely distinct individual. Do not mix or merge facial features, hair, or appearance between subjects",
-      "compiledImages": [],
-      "referenceImageUrls": [],
-      "referenceImages": [],
-      "size": "2048*2048",
-      "cost": "0.2517",
-      "timestamp": "2026-03-26T03:52:28.168Z",
-      "imageAssetId": "1409d6f4-5d01-4510-8d6f-6f6661037eb4"
-    },
-    {
-      "id": "4cd5da31-9c60-4804-9f1c-f106aaf4b945",
-      "imageUrl": "https://d1q70pf5vjeyhc.cloudfront.net/predictions/21b992885b9e45ed99ded9785cf72a85/1.jpeg",
-      "userPrompt": "A far shot of woman she is standing with her arms in the air\n@alba is the woman standing in the distance",
-      "compiledPrompt": "A far shot of woman she is standing with her arms in the air\n\n\n\n\n\nEach person is a completely distinct individual. Do not mix or merge facial features, hair, or appearance between subjects",
-      "compiledImages": [],
-      "referenceImageUrls": [],
-      "referenceImages": [],
-      "size": "2048*2048",
-      "cost": "0.2517",
-      "timestamp": "2026-03-26T03:52:06.444Z"
-    },
-    {
-      "id": "f5e7928d-f740-4918-a02f-2e254c2f70bc",
-      "imageUrl": "https://d1q70pf5vjeyhc.cloudfront.net/predictions/2f13dcee9dd94e94a6b8edfc8de8e077/1.jpeg",
-      "userPrompt": "A far shot of woman @alba she is standing with her arms in the air",
-      "compiledPrompt": "A far shot of woman\n\n\n\n\n\nEach person is a completely distinct individual. Do not mix or merge facial features, hair, or appearance between subjects",
-      "compiledImages": [],
-      "referenceImageUrls": [],
-      "referenceImages": [],
-      "size": "2048*2048",
-      "cost": "0.2517",
-      "timestamp": "2026-03-26T03:50:37.408Z"
     },
     {
       "id": "978d0de0-6736-4fa8-8b24-75f37888d048",
