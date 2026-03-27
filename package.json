@@ -4,11 +4,12 @@
   "main": "main.js",
   "scripts": {
     "start": "node server.js",
+    "dev:preflight": "node preflight.js",
     "dev:server": "node --watch server.js",
     "dev:client": "npm run dev --prefix app",
     "dev:electron": "cross-env NODE_ENV=development electron .",
     "dev:wait-electron": "wait-on http://localhost:5173 && npm run dev:electron",
-    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\" \"npm run dev:wait-electron\"",
+    "dev": "npm run dev:preflight && concurrently \"npm run dev:server\" \"npm run dev:client\" \"npm run dev:wait-electron\"",
     "predist": "npm run build && electron-rebuild -f -w sharp",
     "dist": "electron-builder"
   },

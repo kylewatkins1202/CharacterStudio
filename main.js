@@ -1,6 +1,7 @@
 const { app, BrowserWindow, shell, ipcMain } = require("electron");
 const path = require("path");
 const { spawn, execSync } = require("child_process");
+const { startComfyUI, stopComfyUI } = require("./comfyui");
 
 const isDev = process.env.NODE_ENV === "development";
 const PORT = 4989;
@@ -43,36 +44,27 @@ function createWindow() {
   });
   ipcMain.on("win:close", () => mainWindow?.close());
 
-  // In dev load Vite dev server, in prod load the built client
   const url = isDev
     ? "http://localhost:5173"
     : `http://localhost:${PORT}`;
 
-  // Wait a moment for Express to be ready then load
   setTimeout(() => {
     mainWindow.loadURL(url);
   }, isDev ? 0 : 1500);
 
-  // Open external links in the browser, not in Electron
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: "deny" };
   });
 
-  mainWindow.on("closed", () => { mainWindow = null; });
-}
-
-app.whenReady().then(() => {
-  if (!isDev) startServer();
-  createWindow();
-
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  mainWindow.on("closed", () => {
+    mainWindow = null;
   });
-});
+}
 
 function killServer() {
   if (!serverProcess) return;
+
   try {
     if (process.platform === "win32") {
       execSync(`taskkill /pid ${serverProcess.pid} /f /t`);
@@ -80,14 +72,43 @@ function killServer() {
       serverProcess.kill("SIGTERM");
     }
   } catch {}
+
   serverProcess = null;
 }
 
+async function bootstrap() {
+  try {
+    console.log("Starting ComfyUI...");
+    await startComfyUI();
+
+    if (!isDev) {
+      console.log("Starting local server...");
+      startServer();
+    }
+
+    createWindow();
+
+    app.on("activate", () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
+  } catch (error) {
+    console.error("Startup failed:", error);
+    app.quit();
+  }
+}
+
+app.whenReady().then(bootstrap);
+
 app.on("window-all-closed", () => {
   killServer();
-  if (process.platform !== "darwin") app.quit();
+  stopComfyUI();
+
+  if (process.platform !== "darwin") {
+    app.quit();
+  }
 });
 
 app.on("before-quit", () => {
   killServer();
+  stopComfyUI();
 });

@@ -10,7 +10,7 @@
         "server/**/*.js",
         "server/types.d.ts",
         "eslint.config.js"
-    ],
+, "setup-comfyui.js"    ],
     "exclude": [
         "node_modules",
         "app/node_modules"
