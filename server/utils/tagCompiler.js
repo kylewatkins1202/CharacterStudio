@@ -33,12 +33,7 @@
 
 const crypto = require("crypto")
 const { createImageGridFromBuffers, assetUrls } = require("./imageCollage")
-const {
-    uploadBufferToWaveSpeed,
-    callAnyLLM,
-    callAnyLLMVision,
-    extractLLMText
-} = require("../api/wavespeed")
+const wavespeed = require("../api/wavespeed")
 
 /** Maximum number of input images supported by the current Seedream edit flow. */
 const MODEL_MAX_IMAGES = 10
@@ -278,7 +273,7 @@ async function collapseAssetGroupToSingleUpload(tagKey, groupName, assets) {
 
     const collageBuffer = await createImageGridFromBuffers(buffers)
     const filename = stableFilename(`${tagKey}-${groupName}`, "jpg")
-    const uploaded = await uploadBufferToWaveSpeed(collageBuffer, filename, "image/jpeg")
+    const uploaded = await wavespeed.uploadBufferToWaveSpeed(collageBuffer, filename, "image/jpeg")
 
     return [{
         url: uploaded.url,
@@ -613,7 +608,7 @@ async function parsePromptPlanJsonWithRetry({
             initialText
         ].join("\n")
 
-        const repairResult = await callAnyLLM({
+        const repairResult = await wavespeed.callAnyLLM({
             prompt: repairPrompt,
             systemPrompt: `${buildPromptPlanningSystemPrompt()}\n\n${buildRepairJsonSystemPrompt()}`,
             model: llmOptions.model,
@@ -624,7 +619,7 @@ async function parsePromptPlanJsonWithRetry({
             enableSyncMode: llmOptions.enableSyncMode ?? true
         })
 
-        const repairedText = extractLLMText(repairResult)
+        const repairedText = wavespeed.extractLLMText(repairResult)
 
         try {
             return parseJsonFromLLMText(repairedText)
@@ -784,7 +779,7 @@ async function parsePromptWithLLM({ prompt, tags, tagLocks = {}, llmOptions = {}
         JSON.stringify(tagLocks || {}, null, 2)
     ].join("\n")
 
-    const result = await callAnyLLM({
+    const result = await wavespeed.callAnyLLM({
         prompt: userPrompt,
         systemPrompt: buildPromptPlanningSystemPrompt(),
         model: llmOptions.model,
@@ -795,7 +790,7 @@ async function parsePromptWithLLM({ prompt, tags, tagLocks = {}, llmOptions = {}
         enableSyncMode: llmOptions.enableSyncMode ?? true
     })
 
-    const text = extractLLMText(result)
+    const text = wavespeed.extractLLMText(result)
 
     const parsed = await parsePromptPlanJsonWithRetry({
         initialText: text,
@@ -912,7 +907,7 @@ async function enrichTagLocksWithVision(tags, options = {}) {
             const bodyUrls = assetUrls(tag.assets.body)
 
             if ((force || !nextTag.lock.appearanceDescription) && faceUrls.length) {
-                const result = await callAnyLLMVision({
+                const result = await wavespeed.callAnyLLMVision({
                     prompt: buildCharacterVisionPrompt({ mode: "appearance" }),
                     images: faceUrls,
                     model,
@@ -923,14 +918,14 @@ async function enrichTagLocksWithVision(tags, options = {}) {
                     enableSyncMode
                 })
 
-                const text = extractLLMText(result)
+                const text = wavespeed.extractLLMText(result)
                 if (text) {
                     nextTag.lock.appearanceDescription = text.replace(/\s+/g, " ").trim()
                 }
             }
 
             if ((force || !nextTag.lock.bodyDescription) && bodyUrls.length) {
-                const result = await callAnyLLMVision({
+                const result = await wavespeed.callAnyLLMVision({
                     prompt: buildCharacterVisionPrompt({ mode: "body" }),
                     images: bodyUrls,
                     model,
@@ -941,7 +936,7 @@ async function enrichTagLocksWithVision(tags, options = {}) {
                     enableSyncMode
                 })
 
-                const text = extractLLMText(result)
+                const text = wavespeed.extractLLMText(result)
                 if (text) {
                     nextTag.lock.bodyDescription = text.replace(/\s+/g, " ").trim()
                 }
@@ -956,7 +951,7 @@ async function enrichTagLocksWithVision(tags, options = {}) {
                 : assetUrls(tag.assets.location)
 
             if ((force || !nextTag.lock.basicDescription) && urls.length) {
-                const result = await callAnyLLMVision({
+                const result = await wavespeed.callAnyLLMVision({
                     prompt: buildBasicVisionPrompt(tag.type),
                     images: urls,
                     model,
@@ -967,7 +962,7 @@ async function enrichTagLocksWithVision(tags, options = {}) {
                     enableSyncMode
                 })
 
-                const text = extractLLMText(result)
+                const text = wavespeed.extractLLMText(result)
                 if (text) {
                     nextTag.lock.basicDescription = text.replace(/\s+/g, " ").trim()
                 }

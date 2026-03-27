@@ -14,7 +14,7 @@
 const crypto = require("crypto");
 const express = require("express");
 const db = require("../db");
-const { uploadBufferToWaveSpeed, generateSeedreamEdit } = require("../api/wavespeed");
+const wavespeed = require("../api/wavespeed");
 const { parseBase64Image } = require("../utils/imageCollage");
 const { extractTags, compilePrompt } = require("../utils/tagCompiler");
 const { healTagAssets, healReferenceItems, healAsset, saveAssetLocally } = require("../utils/assets");
@@ -134,7 +134,7 @@ router.post("/generate", async (req, res) => {
         const purpose  = (typeof item === "object" && item.purpose) ? item.purpose : "composition";
         const parsed   = parseBase64Image(b64);
         const filename = `ref-${Date.now()}-${i}.${parsed.ext}`;
-        const uploaded = await uploadBufferToWaveSpeed(parsed.buffer, filename, parsed.mimeType);
+        const uploaded = await wavespeed.uploadBufferToWaveSpeed(parsed.buffer, filename, parsed.mimeType);
         const { localPath, assetPath } = await saveAssetLocally("refs", "reference", filename, parsed.buffer);
         const asset = await db.assets.createAsset({
           id:        crypto.randomUUID(),
@@ -187,7 +187,7 @@ router.post("/generate", async (req, res) => {
     compiled.rawPrompt = finalPrompt;
 
     // ── Generation ─────────────────────────────────────────────────────────
-    const result = await generateSeedreamEdit({
+    const result = await wavespeed.generateSeedreamEdit({
       images:             compiled.images,
       prompt:             compiled.rawPrompt,
       size,

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "main.js",
   "scripts": {
-  "start": "node server.js",
+    "start": "node server.js",
     "dev:server": "node --watch server.js",
     "dev:client": "npm run dev --prefix app",
     "dev:electron": "cross-env NODE_ENV=development electron .",
@@ -66,7 +66,8 @@
     "eslint": "^10.0.3",
     "express": "^5.2.1",
     "form-data": "^4.0.5",
-    "sharp": "^0.34.5"
+    "sharp": "^0.34.5",
+    "ws": "^8.20.0"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

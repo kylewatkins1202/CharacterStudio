@@ -1,6 +1,6 @@
 const { app, BrowserWindow, shell, ipcMain } = require("electron");
 const path = require("path");
-const { spawn } = require("child_process");
+const { spawn, execSync } = require("child_process");
 
 const isDev = process.env.NODE_ENV === "development";
 const PORT = 4989;
@@ -71,11 +71,23 @@ app.whenReady().then(() => {
   });
 });
 
+function killServer() {
+  if (!serverProcess) return;
+  try {
+    if (process.platform === "win32") {
+      execSync(`taskkill /pid ${serverProcess.pid} /f /t`);
+    } else {
+      serverProcess.kill("SIGTERM");
+    }
+  } catch {}
+  serverProcess = null;
+}
+
 app.on("window-all-closed", () => {
-  if (serverProcess) serverProcess.kill();
+  killServer();
   if (process.platform !== "darwin") app.quit();
 });
 
 app.on("before-quit", () => {
-  if (serverProcess) serverProcess.kill();
+  killServer();
 });
