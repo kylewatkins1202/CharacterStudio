@@ -4,22 +4,22 @@ const path = require("path");
 const axios = require("axios");
 
 const MODELS = [
-  {
+  /* {
     url: "https://huggingface.co/unsloth/FLUX.2-klein-4B-GGUF/resolve/main/flux-2-klein-4b-Q5_K_M.gguf",
-    dest: "comfyui/models/diffusion_models/flux2-klein-4b-Q5_K_M.gguf",
+    dest: "comfyui/models/unet/flux2-klein-4b-Q5_K_M.gguf",
     size: "3.2GB",
   },
   {
-    url: "https://huggingface.co/unsloth/Qwen2.5-VL-3B-Instruct-GGUF/resolve/main/Qwen2.5-VL-3B-Instruct-Q5_K_M.gguf",
-    dest: "comfyui/models/text_encoders/qwen_2.5_3b.safetensors",
-    size: "1.9GB",
+    url: "https://huggingface.co/Comfy-Org/vae-text-encorder-for-flux-klein-9b/resolve/main/split_files/text_encoders/qwen_3_8b_fp4mixed.safetensors",
+    dest: "comfyui/models/text_encoders/qwen_3_8b_fp4mixed.safetensors",
+    size: "6.8GB",
   },
   {
-    url: "https://huggingface.co/black-forest-labs/FLUX.2-klein-4B/resolve/main/vae/diffusion_pytorch_model.safetensors",
-    dest: "comfyui/models/vae/ae.safetensors",
+    url: "https://huggingface.co/Comfy-Org/vae-text-encorder-for-flux-klein-9b/resolve/main/split_files/vae/flux2-vae.safetensors",
+    dest: "comfyui/models/vae/flux2-vae.safetensors",
     size: "168MB"
-  }
-  // ae.safetensors, RealESRGAN etc
+  } */
+  // RealESRGAN etc
 ];
 
 /**

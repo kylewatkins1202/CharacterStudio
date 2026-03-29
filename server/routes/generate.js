@@ -15,6 +15,7 @@ const crypto = require("crypto");
 const express = require("express");
 const db = require("../db");
 const wavespeed = require("../api/wavespeed");
+const comfyui = require("../api/comfyui")
 const { parseBase64Image } = require("../utils/imageCollage");
 const { extractTags, compilePrompt } = require("../utils/tagCompiler");
 const { healTagAssets, healReferenceItems, healAsset, saveAssetLocally } = require("../utils/assets");
@@ -74,40 +75,53 @@ const PURPOSE_DIRECTIVES = {
 router.post("/generate", async (req, res) => {
   try {
     const prompt             = String(req.body.prompt || "");
+    const negPrompt          = String(req.body.negPrompt || "");
     const size               = req.body.size;
     const tagLocks           = req.body.tagLocks || {};
     const enableSyncMode     = req.body.enable_sync_mode !== false;
     const enableBase64Output = req.body.enable_base64_output === true;
     const resetCache         = req.body.resetCache === true;
+    const mode               = req.body.mode
+    const model              = req.body.model 
+    const loras              = req.body.loras
+    const steps              = req.body.steps
+    const cfg                = req.body.cfg
+    const denoise             = req.body.denoise
 
     if (!prompt) return res.status(400).json({ error: "prompt is required" });
 
     // ── Tag compilation ────────────────────────────────────────────────────
+    let tagList = []
+
+    // Get tag keys
     const tagKeys = extractTags(prompt);
-    // healTagAssets takes raw DB tags (assetIds format), heals + populates them
-    const tagList = await healTagAssets(await db.tags.getTags(tagKeys));
 
-    let compiled;
+    let compiled
+    // In wavespeed mode
+    if (mode === 'wavespeed') {
+      // healTagAssets takes raw DB tags (assetIds format), heals + populates them
+      tagList = await healTagAssets(await db.tags.getTags(tagKeys));
 
-    if (tagList.length > 0) {
-      const cacheKey = db.cache.makeCacheKey(prompt, tagLocks, tagList);
+      if (tagList.length > 0) {
+        const cacheKey = db.cache.makeCacheKey(prompt, tagLocks, tagList);
 
-      if (resetCache) {
-        await db.cache.deleteCached(cacheKey);
-        console.log(`[cache reset] ${cacheKey.slice(0, 12)}…`);
-      }
+        if (resetCache) {
+          await db.cache.deleteCached(cacheKey);
+          console.log(`[cache reset] ${cacheKey.slice(0, 12)}…`);
+        }
 
-      compiled = await db.cache.getCached(cacheKey);
+        compiled = await db.cache.getCached(cacheKey);
 
-      if (compiled) {
-        console.log(`[cache hit] ${cacheKey.slice(0, 12)}…`);
-      } else {
-        compiled = await compilePrompt({
-          prompt, tags: tagList, tagLocks,
-          parserOptions: { model: LLM_MODEL },
-          visionOptions: { enable: false, force: false, model: VISION_MODEL }
-        });
-        await db.cache.setCached(cacheKey, compiled);
+        if (compiled) {
+          console.log(`[cache hit] ${cacheKey.slice(0, 12)}…`);
+        } else {
+          compiled = await compilePrompt({
+            prompt, tags: tagList, tagLocks,
+            parserOptions: { model: LLM_MODEL },
+            visionOptions: { enable: false, force: false, model: VISION_MODEL }
+          });
+          await db.cache.setCached(cacheKey, compiled);
+        }
       }
     }
 
@@ -118,7 +132,7 @@ router.post("/generate", async (req, res) => {
     const assetIdItems = (await Promise.all(
       rawAssetIdRefs.map(async (item) => {
         const assetId = typeof item === "string" ? item : item.id;
-        const purpose = (typeof item === "object" && item.purpose) ? item.purpose : "composition";
+        const purpose = (typeof item === "object" && item.purpose) ? item.purpose : "";
         const asset   = await db.assets.getAsset(assetId);
         if (!asset) return null;
         const healed  = await healAsset(asset);
@@ -131,7 +145,7 @@ router.post("/generate", async (req, res) => {
     const base64Items = await Promise.all(
       rawReferenceImages.map(async (item, i) => {
         const b64      = typeof item === "string" ? item : item.data;
-        const purpose  = (typeof item === "object" && item.purpose) ? item.purpose : "composition";
+        const purpose  = (typeof item === "object" && item.purpose) ? item.purpose : "";
         const parsed   = parseBase64Image(b64);
         const filename = `ref-${Date.now()}-${i}.${parsed.ext}`;
         const uploaded = await wavespeed.uploadBufferToWaveSpeed(parsed.buffer, filename, parsed.mimeType);
@@ -155,8 +169,8 @@ router.post("/generate", async (req, res) => {
     const rawReferenceUrls = Array.isArray(req.body.referenceImageUrls) ? req.body.referenceImageUrls : [];
     const rawUrlItems = rawReferenceUrls.map((item) =>
       typeof item === "string"
-        ? { url: item, purpose: "composition" }
-        : { url: item.url, purpose: item.purpose || "composition" }
+        ? { url: item, purpose: "" }
+        : { url: item.url, purpose: item.purpose }
     );
     const urlItems = await healReferenceItems(rawUrlItems);
 
@@ -166,38 +180,57 @@ router.post("/generate", async (req, res) => {
 
     // ── Prompt assembly ────────────────────────────────────────────────────
     let finalPrompt = compiled?.rawPrompt ?? prompt;
-
-    if (allReferenceItems.length > 0) {
+ 
+    if (mode === 'wavespeed' && allReferenceItems.length > 0) {
       const characterCount = (compiled?.parsedPlan?.characters ?? tagList.filter((t) => t.type === "character")).length;
       const isPlural  = characterCount > 1;
       const baseIndex = (compiled?.images ?? []).length;
 
       const refDirectives = allReferenceItems.map(({ purpose }, i) => {
+        if (purpose === '') return ''
         const n        = baseIndex + i + 1;
         const entry    = PURPOSE_DIRECTIVES[purpose] || PURPOSE_DIRECTIVES.composition;
         const template = isPlural ? entry.plural : entry.singular;
-        return template.replace("{n}", n);
+        return template.  replace("{n}", n);
       }).join("\n");
 
       finalPrompt = `${finalPrompt}\n\n${refDirectives}`;
     }
 
-    if (!compiled) compiled = { images: [], rawPrompt: prompt };
+    // If not compiled
+    if (!compiled)  compiled = { images: [], rawPrompt: prompt };
+
+    // Add images to compiled photo
     compiled.images.push(...uploadedReferenceUrls);
     compiled.rawPrompt = finalPrompt;
 
+    let result, imageUrl;
     // ── Generation ─────────────────────────────────────────────────────────
-    const result = await wavespeed.generateSeedreamEdit({
-      images:             compiled.images,
-      prompt:             compiled.rawPrompt,
-      size,
-      enableSyncMode,
-      enableBase64Output
-    });
+    if (mode === "wavespeed") {
+      result = await wavespeed.generateSeedreamEdit({
+        images:             compiled.images,
+        prompt:             compiled.rawPrompt,
+        size,
+        enableSyncMode,
+        enableBase64Output
+      });
 
+      imageUrl = extractImageUrlFromResult(result);
+    } else {
+      let [width, height] = size.split('*')
+      result = await comfyui.generateComfyImage({
+        images: compiled.images,
+        prompt: compiled.rawPrompt,
+        negPrompt: negPrompt,
+        size,
+        loras: loras,
+        steps: steps,
+        model
+      })
+    }
     // ── Persist generated image as an asset ────────────────────────────────
     // The generated image is a new photo entering the system — save locally and register.
-    const imageUrl = extractImageUrlFromResult(result);
+    
     let imageAssetId = null;
 
     if (imageUrl) {
@@ -233,10 +266,17 @@ router.post("/generate", async (req, res) => {
         imageAssetId,
         referenceAssetIds,
         userPrompt:       prompt,
+        mode:             mode,
+        model:            model,
+        cfg:              cfg,
+        steps:            steps,
+        denoise:          denoise,
+        loras:            loras,
+        negPrompt:        negPrompt,
         compiledPrompt:   compiled?.rawPrompt || null,
         compiledImages:   compiled?.images || [],
         size:             size || null,
-        cost:             estimateCost(size),
+        cost:             mode === 'local' ? 0 : estimateCost(size),
         timestamp:        new Date().toISOString(),
       });
     }

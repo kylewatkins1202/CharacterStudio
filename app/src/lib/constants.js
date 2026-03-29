@@ -18,6 +18,7 @@ export const ASPECT_RATIOS = [
  * Each entry describes how the reference image will influence generation.
  */
 export const REFERENCE_PURPOSES = [
+  {value: '', label: "None"},
   { value: "composition", label: "Composition", hint: "Framing, layout, subject placement" },
   { value: "style",       label: "Style",       hint: "Lighting, color grade, film aesthetic" },
   { value: "pose",        label: "Pose",        hint: "Body position, gesture, stance" },

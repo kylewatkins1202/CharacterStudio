@@ -18,6 +18,262 @@ const { v4: uuidv4 } = require("uuid")
 
 const COMFY_BASE_URL = "http://127.0.0.1:8188"
 const OLLAMA_BASE_URL = "http://127.0.0.1:11434"
+const MODELS = {
+    "DarkBeast": {
+        type: 'safetensors',
+        base: "flux2klein",
+        name: "darkBeastMar2126Latest_dbkleinv2BFS.safetensors",
+    },
+    "BigLove": {
+        type: "safetensors",
+        base: "flux2klein",
+        name: "BigLoveKlein2_fp8.safetensors"
+    },
+    "Flux2Klein9b": {
+        type: "gguf",
+        base: "flux2klein",
+        name: "flux-2-klein-9b-Q5_K_S.gguf"
+    },
+}
+
+const LORAS = {
+    "JESS": {
+        for: "flux2klein",
+        name: "jess_epoch_10.safetensors"
+    }
+}
+
+const imageUrlToBase64 = async (url) => {
+  try {
+    const response = await fetch(url);
+    const arrayBuffer = await response.arrayBuffer();
+    return Buffer.from(arrayBuffer).toString('base64');
+  } catch (error) {
+    console.error('Error converting image:', error);
+    throw error;
+  }
+};
+
+const buildDynamicWorkflow = ({ prompt, negPrompt, modelKey = 'DarkBeast', cfg = 1.5, steps = 4, denoise = .9, base64images = [], loras = [], width, height } = {}) => {
+    let workflow = {}
+
+    const MODEL_BASE = "1"  // raw unet output — may be wrapped by lora stack
+    const VAE = "2"
+    const CLIP = "3"
+    const PROMPT = "4"
+    const NEGPROMPT = "5"
+    const EMPTYLATENT = "6"
+    const CFGGUIDER = "7"
+    const BASICSCHEDULER = "8"
+    const RANDOMNOISE = "9"
+    const KSAMPLER = "10"
+    const SAMPLERCUSTOM = "11"
+    const VAEDECODE = "12"
+
+    // --- Model loader ---
+    workflow[MODEL_BASE] = MODELS[modelKey].type === "gguf"
+        ? {
+            "inputs": { "unet_name": MODELS[modelKey].name },
+            "class_type": "UnetLoaderGGUF",
+            "_meta": { "title": "Unet Loader (GGUF)" }
+        }
+        : {
+            "inputs": { "unet_name": MODELS[modelKey].name, "weight_dtype": "default" },
+            "class_type": "UNETLoader",
+            "_meta": { "title": "Load Diffusion Model" }
+        }
+
+    // --- VAE ---
+    workflow[VAE] = {
+        "inputs": { "vae_name": "flux2-vae.safetensors" },
+        "class_type": "VAELoader",
+        "_meta": { "title": "Load VAE" }
+    }
+
+    // --- CLIP ---
+    workflow[CLIP] = {
+        "inputs": {
+            "clip_name": "qwen_3_8b_fp4mixed.safetensors",
+            "type": "flux2",
+            "device": "default"
+        },
+        "class_type": "CLIPLoader",
+        "_meta": { "title": "Load CLIP" }
+    }
+
+    // --- Prompts ---
+    workflow[PROMPT] = {
+        "inputs": { "text": prompt, "clip": [CLIP, 0] },
+        "class_type": "CLIPTextEncode",
+        "_meta": { "title": "CLIP Text Encode (Positive Prompt)" }
+    }
+
+    workflow[NEGPROMPT] = {
+        "inputs": { "text": negPrompt, "clip": [CLIP, 0] },
+        "class_type": "CLIPTextEncode",
+        "_meta": { "title": "CLIP Text Encode (Negative Prompt)" }
+    }
+
+    // --- Empty latent ---
+    workflow[EMPTYLATENT] = {
+        "inputs": { "width": 752, "height": 1024, "batch_size": 1 },
+        "class_type": "EmptyFlux2LatentImage",
+        "_meta": { "title": "Empty Flux 2 Latent" }
+    }
+
+    // --- Dynamic node ID counter ---
+    // Starts at 13 to never collide with the 12 hardcoded reserved slots above.
+    let dynamicId = 13
+
+    // --- LoRA stack ---
+    // Each LoRA wraps the previous model+clip output.
+    // loraModelRef tracks what the next node should use as its model input.
+    let loraModelRef = [MODEL_BASE, 0]
+
+    if (loras.length > 0) {
+        loras.forEach(({loraKey, strength = 1} = {}, i) => {
+            const loraData = LORAS[loraKey]
+            if (!loraData) {
+                console.warn(`LoRA key "${loraKey}" not found in LORAS registry, skipping.`)
+                return
+            }
+
+            const loraNodeKey = `${dynamicId++}`
+
+            workflow[loraNodeKey] = {
+                "inputs": {
+                "lora_name":loraData.name,
+                "strength_model": strength,
+                "model": loraModelRef
+                },
+                "class_type": "LoraLoaderModelOnly",
+                "_meta": {
+                "title": `Load LoRA - ${loraKey}`
+                }
+            }
+
+            // Next node (or final guider/scheduler) uses this lora's output
+            loraModelRef = [loraNodeKey, 0]
+        })
+    }
+
+    // --- Scheduler (uses final model ref after loras) ---
+    workflow[BASICSCHEDULER] = {
+        "inputs": {
+            "scheduler": "sgm_uniform",
+            "steps": steps,
+            "denoise": denoise,
+            "model": loraModelRef
+        },
+        "class_type": "BasicScheduler",
+        "_meta": { "title": "BasicScheduler" }
+    }
+
+    // --- KSampler ---
+    workflow[KSAMPLER] = {
+        "inputs": { "sampler_name": "euler" },
+        "class_type": "KSamplerSelect",
+        "_meta": { "title": "KSamplerSelect" }
+    }
+
+    // --- Random noise ---
+    workflow[RANDOMNOISE] = {
+        "inputs": { "noise_seed": Math.floor(Math.random() * 999999999999999) },
+        "class_type": "RandomNoise",
+        "_meta": { "title": "RandomNoise" }
+    }
+
+    // --- Reference image chain ---
+    // Each image: LoadImage -> VAEEncode -> ReferenceLatent
+    // ReferenceLatent #N conditioning input = output of ReferenceLatent #N-1
+    // First ReferenceLatent conditioning input = PROMPT node
+    // CFGGuider positive input = last ReferenceLatent output (or PROMPT if no images)
+    let positiveRef = [PROMPT, 0]
+
+    if (base64images.length > 0) {
+        base64images.forEach((_, i) => {
+            const loadImageKey = `${dynamicId++}`
+            const vaeEncodeKey = `${dynamicId++}`
+            const refLatentKey = `${dynamicId++}`
+
+            workflow[loadImageKey] = {
+                "inputs": {
+                    "data": base64images[i]  // raw base64 string, no "data:image/png;base64," prefix
+                },
+                "class_type": "LoadImageFromBase64",
+                "_meta": { "title": `Load Image ${i + 1}` }
+            }
+            
+
+            workflow[vaeEncodeKey] = {
+                "inputs": {
+                    "pixels": [loadImageKey, 0],
+                    "vae": [VAE, 0]
+                },
+                "class_type": "VAEEncode",
+                "_meta": { "title": `VAE Encode ${i + 1}` }
+            }
+
+            workflow[refLatentKey] = {
+                "inputs": {
+                    "conditioning": positiveRef,  // chains from previous ref or PROMPT
+                    "latent": [vaeEncodeKey, 0]
+                },
+                "class_type": "ReferenceLatent",
+                "_meta": { "title": `ReferenceLatent ${i + 1}` }
+            }
+
+            // Next iteration chains from this ReferenceLatent's output
+            positiveRef = [refLatentKey, 0]
+        })
+    }
+
+    // --- CFG Guider (positive = end of reference chain or raw prompt) ---
+    workflow[CFGGUIDER] = {
+        "inputs": {
+            "cfg": cfg,
+            "model": loraModelRef,
+            "positive": positiveRef,
+            "negative": [NEGPROMPT, 0]
+        },
+        "class_type": "CFGGuider",
+        "_meta": { "title": "CFGGuider" }
+    }
+
+    // --- SamplerCustomAdvanced ---
+    workflow[SAMPLERCUSTOM] = {
+        "inputs": {
+            "noise": [RANDOMNOISE, 0],
+            "guider": [CFGGUIDER, 0],
+            "sampler": [KSAMPLER, 0],
+            "sigmas": [BASICSCHEDULER, 0],
+            "latent_image": [EMPTYLATENT, 0]
+        },
+        "class_type": "SamplerCustomAdvanced",
+        "_meta": { "title": "SamplerCustomAdvanced" }
+    }
+
+    // --- VAE Decode ---
+    workflow[VAEDECODE] = {
+        "inputs": {
+            "samples": [SAMPLERCUSTOM, 0],
+            "vae": [VAE, 0]
+        },
+        "class_type": "VAEDecode",
+        "_meta": { "title": "VAE Decode" }
+    }
+
+    workflow[`${Object.keys(workflow).length + 1}`] =  {
+        class_type: "SaveImage",
+        inputs: {
+            images: [VAEDECODE,0],
+            filename_prefix: "klein_output"
+        }
+    }
+
+    return workflow
+}
+
 
 // ─── Image Generation ────────────────────────────────────────────────────────
 
@@ -39,9 +295,11 @@ const OLLAMA_BASE_URL = "http://127.0.0.1:11434"
  */
 async function generateComfyImage({
     images = [],
+    model = "DarkBeat",
     prompt,
+    negPrompt,
     size,
-    upscale = true,
+    upscale = false,
     upscaleModel = "RealESRGAN_x4plus.pth",
     loras = [],
     steps = 4,
@@ -50,17 +308,24 @@ async function generateComfyImage({
 
     const { width, height } = parseSize(size)
 
-    const workflow = buildWorkflow({
+    let base64images = []
+
+    if (images.length > 0) {
+        for (let i = 0 ; i < images.length; i++) {
+            const url = images[i]
+            let base64Image = await imageUrlToBase64(url)
+            base64images.push(base64Image)
+        }
+    }
+    const workflow = buildDynamicWorkflow({
         prompt,
-        referenceBase64s: images.map(buf =>
-            Buffer.isBuffer(buf) ? buf.toString("base64") : buf
-        ),
+        negPrompt,
+        modelKey: "DarkBeast",
+        base64images: base64images,
         loras,
         width,
         height,
         steps,
-        upscale,
-        upscaleModel,
     })
 
     // Queue the prompt
@@ -81,7 +346,9 @@ async function generateComfyImage({
         { responseType: "arraybuffer" }
     )
 
-    return Buffer.from(imgRes.data)
+    return {
+        url: `${COMFY_BASE_URL}/view?filename=${filename}&type=output`
+    }
 }
 
 /**
@@ -215,13 +482,13 @@ function buildWorkflow({
     }
 
     // Save output
-    workflow["10"] = {
+    /* workflow["10"] = {
         class_type: "SaveImage",
         inputs: {
             images: upscale ? ["9", 0] : ["7", 0],
             filename_prefix: "klein_output"
         }
-    }
+    } */
 
     return workflow
 }

@@ -100,18 +100,20 @@ function UrlReferenceInput({ onAdd }) {
  *   onChange: (updater: Function) => void
  * }} props
  */
-export function ReferenceImageInput({ images, onChange }) {
+export function ReferenceImageInput({ images, onChange, maxImages }) {
   const inputRef      = useRef();
   const [dragging,    setDragging]    = useState(false);
   const [showPicker,  setShowPicker]  = useState(false);
 
   const existingAssetIds = images.filter((i) => i.assetId).map((i) => i.assetId);
+  const atLimit = maxImages != null && images.length >= maxImages;
 
   const addFiles = async (fileList) => {
-    // Convert each File to base64 in parallel
     const srcs = await Promise.all(Array.from(fileList).map(toBase64));
-    // Append new file-backed reference images with the default purpose
-    onChange((p) => [...p, ...srcs.map((src) => ({ src, isUrl: false, purpose: "composition" }))]);
+    onChange((p) => {
+      const remaining = maxImages != null ? Math.max(0, maxImages - p.length) : srcs.length;
+      return [...p, ...srcs.slice(0, remaining).map((src) => ({ src, isUrl: false, purpose: "composition" }))];
+    });
   };
 
   const handleDrop = (e) => {
@@ -134,7 +136,10 @@ export function ReferenceImageInput({ images, onChange }) {
   };
 
   const handlePickAssets = (assets) => {
-    onChange((p) => [...p, ...assets.map((a) => ({ assetId: a.id, url: a.url, purpose: "composition" }))]);
+    onChange((p) => {
+      const remaining = maxImages != null ? Math.max(0, maxImages - p.length) : assets.length;
+      return [...p, ...assets.slice(0, remaining).map((a) => ({ assetId: a.id, url: a.url, purpose: "composition" }))];
+    });
   };
 
   return (
@@ -150,45 +155,50 @@ export function ReferenceImageInput({ images, onChange }) {
 
       {/* Drop zone / file browser trigger */}
       <div
-        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+        onDragOver={(e) => { if (!atLimit) { e.preventDefault(); setDragging(true); } }}
         onDragLeave={() => setDragging(false)}
-        onDrop={handleDrop}
-        onClick={() => inputRef.current?.click()}
+        onDrop={atLimit ? undefined : handleDrop}
+        onClick={() => { if (!atLimit) inputRef.current?.click(); }}
         style={{
           border:         `1px dashed ${dragging ? colors.textMuted : colors.borderStrong}`,
           borderRadius:   radius.md,
           padding:        "12px 16px",
-          cursor:         "pointer",
+          cursor:         atLimit ? "not-allowed" : "pointer",
           background:     dragging ? colors.surfaceSink : "transparent",
           transition:     "all 0.15s",
           display:        "flex",
           alignItems:     "center",
           gap:            10,
-          color:          colors.textGhost,
+          color:          atLimit ? colors.borderStrong : colors.textGhost,
           fontFamily:     font.mono,
           fontSize:       font.sizeMd,
           marginBottom:   images.length > 0 ? 10 : 0,
+          opacity:        atLimit ? 0.5 : 1,
         }}
       >
         <span style={{ fontSize: 18 }}>+</span>
-        <span>{dragging ? "Drop to add reference" : "Drop images or click to add reference photos"}</span>
+        <span>{atLimit ? `Limit reached (${maxImages})` : dragging ? "Drop to add reference" : "Drop images or click to add reference photos"}</span>
         <input
           ref={inputRef}
           type="file"
           accept="image/*"
           multiple
+          disabled={atLimit}
           style={{ display: "none" }}
           onChange={(e) => addFiles(e.target.files)}
         />
       </div>
 
-      <UrlReferenceInput
-        onAdd={(url) => onChange((p) => [...p, { url, isUrl: true, purpose: "composition" }])}
-      />
+      {!atLimit && (
+        <UrlReferenceInput
+          onAdd={(url) => onChange((p) => [...p, { url, isUrl: true, purpose: "composition" }])}
+        />
+      )}
 
       {/* Pick from existing assets */}
       <button
-        onClick={() => setShowPicker(true)}
+        onClick={() => { if (!atLimit) setShowPicker(true); }}
+        disabled={atLimit}
         style={{
           width:        "100%",
           padding:      "7px 12px",

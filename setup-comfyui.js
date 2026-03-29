@@ -107,6 +107,7 @@ async function setupComfyUI() {
   const comfyDir = path.join(projectRoot, "comfyui");
   const customNodesDir = path.join(comfyDir, "custom_nodes");
   const ggufDir = path.join(customNodesDir, "ComfyUI-GGUF");
+  const base64nodeDir = path.join(customNodesDir, "comfyui-base64-to-image")
   const comfyRequirements = path.join(comfyDir, "requirements.txt");
   const ggufRequirements = path.join(ggufDir, "requirements.txt");
 
@@ -158,6 +159,15 @@ async function setupComfyUI() {
     ]);
   } else {
     console.log("ComfyUI-GGUF already exists. Skipping clone.");
+  }
+
+  if (!exists(base64nodeDir)) {
+    console.log("Cloning comfyui-base64-to-image...")
+    await runCommand('git', [
+      "clone",
+      "https://github.com/glowcone/comfyui-base64-to-image.git",
+      base64nodeDir
+    ])
   }
 
   if (!exists(ggufRequirements)) {

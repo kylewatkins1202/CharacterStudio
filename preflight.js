@@ -1,4 +1,5 @@
 // preflight.js
+const { setupPython } = require("./setup-python");
 const { setupComfyUI } = require("./setup-comfyui");
 const { ensureModelsDownloaded } = require("./setup-models");
 
@@ -12,7 +13,10 @@ const { ensureModelsDownloaded } = require("./setup-models");
  * 3. Models are downloaded
  */
 async function runPreflight() {
-  console.log("Running ComfyUI setup...");
+  console.log("Setting up bundled Python...");
+  await setupPython();
+
+  console.log("Setting up ComfyUI...");
   await setupComfyUI();
 
   console.log("Ensuring models are downloaded...");

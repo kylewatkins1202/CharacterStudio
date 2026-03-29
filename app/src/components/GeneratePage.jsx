@@ -4,6 +4,7 @@ import { ASPECT_RATIOS } from "../lib/constants";
 import { PromptInput } from "./PromptInput";
 import { ReferenceImageInput } from "./ReferenceImageInput";
 import { colors, font, radius, fieldLabel as FL } from "../theme";
+import { useState } from "react";
 
 /**
  * GeneratePage — the main image generation view.
@@ -42,13 +43,16 @@ export function GeneratePage({
   result, setResult,
   compiled, setCompiled,
   referenceImages, setReferenceImages,
+  maxReferenceImages,
   resetCache, setResetCache,
+  mode, setMode,
+  negPrompt, setNegPrompt,
   onGenerated,
 }) {
   const computedSize = computeSize(aspect, baseSize);
   const cost         = estimateCost(computedSize);
   const imageUrl     = result ? extractImageUrl(result) : null;
-
+  
   /**
    * Generates image and shows the image and its raw prompt to the user
    * @returns {Promise<void>}
@@ -66,10 +70,14 @@ export function GeneratePage({
     // Set compiled to null
     setCompiled(null);
 
+    let model = 1
     try {
       // Request body
       const body = {
         prompt,
+        negPrompt: negPrompt ?? '',
+        mode: mode,
+        ...(mode === 'local' && {model: model}),
         size: computedSize,
         // Existing assets picked from the library — resolved server-side by ID
         referenceAssetIds:  referenceImages.filter((i) => i.assetId).map((i) => ({ id: i.assetId, purpose: i.purpose })),
@@ -119,11 +127,55 @@ export function GeneratePage({
         <p style={{ color: colors.textMuted, fontFamily: font.mono, fontSize: font.sizeLg, marginTop: 6 }}>
           Craft your scene — type <span style={{ color: colors.textMuted }}>@</span> to reference tags
         </p>
+        <br />
+        <div> 
+          <button
+            onClick={() => {console.log('set'); setMode('wavespeed')}}
+            disabled={loading}
+            style={{
+              padding:      "10px 32px",
+              background:   loading || mode !== "wavespeed" ? "#111" : colors.primary,
+              color:        loading || mode !== "wavespeed" ? colors.textGhost : colors.primaryText,
+              border:       "none",
+              borderRadius: `${radius.md}px ${0}px ${0}px ${radius.md}px`,
+              fontFamily:   font.mono,
+              fontSize:     font.sizeLg,
+              fontWeight:   600,
+              cursor:       loading ? "not-allowed" : "pointer",
+              transition:   "all 0.2s",
+              whiteSpace:   "nowrap",
+            }}
+          >
+            WaveSpeed
+          </button>
+          <button
+            onClick={() => setMode('local')}
+            disabled={loading}
+            style={{
+              padding:      "10px 32px",
+              background:   loading || mode !== "local" ? "#111" : colors.primary,
+              color:        loading || mode !== "local" ? colors.textGhost : colors.primaryText,
+              border:       "none",
+              borderRadius: `${0}px ${radius.md}px ${radius.md}px ${0}px`,
+              fontFamily:   font.mono,
+              fontSize:     font.sizeLg,
+              fontWeight:   600,
+              cursor:       loading ? "not-allowed" : "pointer",
+              transition:   "all 0.2s",
+              whiteSpace:   "nowrap",
+            }}
+          >
+            Local
+          </button>
+        </div>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <PromptInput value={prompt} onChange={setPrompt} tags={tags} />
-
+        <PromptInput value={prompt} onChange={setPrompt} tags={mode === 'wavespeed' ? tags : []} disableTags={mode === 'local' ? true : false} placeholder={mode === "wavespeed" ? "Describe your scene… use @tag to reference characters, outfits, props & locations" : "Describe your scene…"} />
+        {
+          mode === 'local' &&
+            <PromptInput value={negPrompt} onChange={setNegPrompt} placeholder={"Negative prompt…"}></PromptInput>
+        }
         {/* Reference images */}
         <div>
           <label style={FL}>
@@ -132,7 +184,7 @@ export function GeneratePage({
               — passed directly to the model alongside tag images
             </span>
           </label>
-          <ReferenceImageInput images={referenceImages} onChange={setReferenceImages} />
+          <ReferenceImageInput images={referenceImages} onChange={setReferenceImages} maxImages={maxReferenceImages} />
         </div>
 
         {/* Aspect ratio */}

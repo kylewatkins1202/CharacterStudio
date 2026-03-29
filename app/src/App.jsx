@@ -56,7 +56,20 @@ export default function App() {
   const [resetCache,      setResetCache]      = useState(false);
   // Array of reference image objects attached to the current prompt
   const [referenceImages, setReferenceImages] = useState([]);
+  // Mode for generating
+  const [mode, setMode] = useState('wavespeed')
+  // Raw negative prompt typed by user
+  const [negPrompt, setNegPrompt] = useState("")
 
+  // Max reference images allowed by the current mode (null = unlimited)
+  const maxReferenceImages = mode === 'local' ? 1 : null;
+
+  // Prune reference images down to the limit whenever mode changes
+  useEffect(() => {
+    if (maxReferenceImages != null) {
+      setReferenceImages((p) => p.length > maxReferenceImages ? p.slice(0, maxReferenceImages) : p);
+    }
+  }, [maxReferenceImages]);
   // ── Data loaders ─────────────────────────────────────────────────────────────
 
   /**
@@ -95,9 +108,15 @@ export default function App() {
    * @param {{ id: string, url: string, purpose?: string }} asset
    */
   const handleAddReference = useCallback((asset) => {
-    setReferenceImages((p) => [...p, { assetId: asset.id, url: asset.url, purpose: asset.purpose || "composition" }]);
+    setReferenceImages((p) => {
+      if (maxReferenceImages != null && p.length >= maxReferenceImages) {
+        toast.add(`Reference image limit reached (${maxReferenceImages})`, "error");
+        return p;
+      }
+      return [...p, { assetId: asset.id, url: asset.url, purpose: asset.purpose || "" }];
+    });
     setPage("generate");
-  }, []);
+  }, [maxReferenceImages, toast]);
 
   /**
    * Increment the gallery badge after a successful generation.
@@ -115,12 +134,21 @@ export default function App() {
    * @param {object} entry
    */
   const handleUsePrompt = useCallback((entry) => {
+    if (entry.mode === 'local') {
+      setMode('local') 
+      setNegPrompt(entry?.userNegPrompt ?? '')
+    }
+    else {
+      setMode('wavespeed')
+    }
+    
     // Restore the original user prompt
     setPrompt(entry.userPrompt);
+    
 
     // Restore reference images (populated server-side from asset IDs)
     if (entry.referenceImages?.length) {
-      setReferenceImages(entry.referenceImages.map(({ url, purpose }) => ({ url, isUrl: true, purpose: purpose || "composition" })));
+      setReferenceImages(entry.referenceImages.map(({ url, purpose }) => ({ url, isUrl: true, purpose: purpose || "" })));
     } else {
       setReferenceImages([]);
     }
@@ -281,6 +309,8 @@ export default function App() {
           tags={tags}
           toast={toast}
           prompt={prompt}         setPrompt={setPrompt}
+          negPrompt={negPrompt}   setNegPrompt={setNegPrompt}
+          mode={mode}             setMode={setMode}
           aspect={aspect}         setAspect={setAspect}
           baseSize={baseSize}     setBaseSize={setBaseSize}
           loading={loading}       setLoading={setLoading}
@@ -288,6 +318,7 @@ export default function App() {
           compiled={compiled}     setCompiled={setCompiled}
           referenceImages={referenceImages}
           setReferenceImages={setReferenceImages}
+          maxReferenceImages={maxReferenceImages}
           resetCache={resetCache} setResetCache={setResetCache}
           onGenerated={handleGenerated}
         />

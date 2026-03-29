@@ -47,7 +47,7 @@ function tokenize(str, tagKeys) {
  * - The `value` / `onChange` contract uses the plain-text form ("@name"),
  *   so the parent is unaffected by the pill rendering.
  */
-export function PromptInput({ value, onChange, tags }) {
+export function PromptInput({ value, onChange, tags = [], placeholder, disableTags = false }) {
   const [mentionQuery,      setMentionQuery]      = useState(null);
   const [mentionStart,      setMentionStart]      = useState(null);
   const [mentionReplaceEnd, setMentionReplaceEnd] = useState(null);
@@ -55,7 +55,7 @@ export function PromptInput({ value, onChange, tags }) {
   const [focused,           setFocused]           = useState(false);
   const editorRef = useRef(null);
 
-  const tagKeys = useMemo(() => new Set(tags.map((t) => t.key)), [tags]);
+  const tagKeys = useMemo(() => disableTags ? new Set() : new Set(tags.map((t) => t.key)), [tags, disableTags]);
 
   const filtered = mentionQuery !== null
     ? tags.filter((t) => t.key.toLowerCase().includes(mentionQuery.toLowerCase())).slice(0, 8)
@@ -96,6 +96,13 @@ export function PromptInput({ value, onChange, tags }) {
     }
   };
 
+  // Force re-render whenever tagKeys changes (e.g. disableTags toggled) so pills
+  // are stripped or restored even when the serialized value hasn't changed.
+  useEffect(() => {
+    renderToDOM(value);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tagKeys]);
+
   // Sync value → DOM only when they diverge (avoids clobbering cursor mid-type)
   useEffect(() => {
     const el = editorRef.current;
@@ -104,7 +111,7 @@ export function PromptInput({ value, onChange, tags }) {
       renderToDOM(value);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, tagKeys]);
+  }, [value]);
 
   // ── Cursor helpers ──────────────────────────────────────────────────────────
 
@@ -144,7 +151,7 @@ export function PromptInput({ value, onChange, tags }) {
     onChange(str);
     const before = getBeforeCursor();
     const atIdx  = before.lastIndexOf("@");
-    if (atIdx !== -1 && !before.slice(atIdx + 1).includes(" ")) {
+    if (!disableTags && atIdx !== -1 && !before.slice(atIdx + 1).includes(" ")) {
       setMentionStart(atIdx);
       setMentionQuery(before.slice(atIdx + 1));
     } else {
@@ -257,7 +264,7 @@ export function PromptInput({ value, onChange, tags }) {
           setFocused(false);
           setTimeout(() => setMentionQuery(null), 150);
         }}
-        data-placeholder="Describe your scene… use @tag to reference characters, outfits, props & locations"
+        data-placeholder={placeholder}
         style={{
           width:        "100%",
           minHeight:    "20.5em",
