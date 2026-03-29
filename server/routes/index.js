@@ -22,6 +22,7 @@ router.get("/health", (req, res) => res.json({ ok: true }));
 // Route groups
 router.use(require("./assets"));
 router.use(require("./tags"));
+router.use(require("./comfyui"));
 router.use(require("./gallery"));
 router.use(require("./generate"));
 router.use(require("./compile"));

@@ -43,6 +43,28 @@ const LORAS = {
     }
 }
 
+const SCHEDULERS = [
+    "simple", "sgm_uniform", "karras", "exponential",
+    "ddim_uniform", "beta", "normal", "linear_quadratic", "kl_optimal",
+]
+
+const SAMPLERS = [
+    "euler", "euler_cfg_pp", "euler_ancestral", "euler_ancestral_cfg_pp",
+    "heun", "heunpp2", "exp_heun_2_x0", "exp_heun_2_x0_sde",
+    "dpm_2", "dpm_2_ancestral", "lms", "dpm_fast", "dpm_adaptive",
+    "dpmpp_2s_ancestral", "dpmpp_2s_ancestral_cfg_pp",
+    "dpmpp_sde", "dpmpp_sde_gpu",
+    "dpmpp_2m", "dpmpp_2m_cfg_pp", "dpmpp_2m_sde", "dpmpp_2m_sde_gpu",
+    "dpmpp_2m_sde_heun", "dpmpp_2m_sde_heun_gpu",
+    "dpmpp_3m_sde", "dpmpp_3m_sde_gpu",
+    "ddpm", "lcm", "ipndm", "ipndm_v", "deis",
+    "res_multistep", "res_multistep_cfg_pp",
+    "res_multistep_ancestral", "res_multistep_ancestral_cfg_pp",
+    "gradient_estimation", "gradient_estimation_cfg_pp",
+    "er_sde", "seeds_2", "seeds_3",
+    "sa_solver", "sa_solver_pece", "ddim", "uni_pc",
+]
+
 const imageUrlToBase64 = async (url) => {
   try {
     const response = await fetch(url);
@@ -54,7 +76,7 @@ const imageUrlToBase64 = async (url) => {
   }
 };
 
-const buildDynamicWorkflow = ({ prompt, negPrompt, modelKey = 'DarkBeast', cfg = 1.5, steps = 4, denoise = .9, base64images = [], loras = [], width, height } = {}) => {
+const buildDynamicWorkflow = ({ prompt, negPrompt, modelKey = 'DarkBeast', cfg = 1.5, steps = 4, denoise = .9, scheduler = "sgm_uniform", sampler = "euler", base64images = [], loras = [], width, height } = {}) => {
     let workflow = {}
 
     const MODEL_BASE = "1"  // raw unet output — may be wrapped by lora stack
@@ -160,7 +182,7 @@ const buildDynamicWorkflow = ({ prompt, negPrompt, modelKey = 'DarkBeast', cfg =
     // --- Scheduler (uses final model ref after loras) ---
     workflow[BASICSCHEDULER] = {
         "inputs": {
-            "scheduler": "sgm_uniform",
+            "scheduler": scheduler,
             "steps": steps,
             "denoise": denoise,
             "model": loraModelRef
@@ -171,7 +193,7 @@ const buildDynamicWorkflow = ({ prompt, negPrompt, modelKey = 'DarkBeast', cfg =
 
     // --- KSampler ---
     workflow[KSAMPLER] = {
-        "inputs": { "sampler_name": "euler" },
+        "inputs": { "sampler_name": sampler },
         "class_type": "KSamplerSelect",
         "_meta": { "title": "KSamplerSelect" }
     }
@@ -295,7 +317,7 @@ const buildDynamicWorkflow = ({ prompt, negPrompt, modelKey = 'DarkBeast', cfg =
  */
 async function generateComfyImage({
     images = [],
-    model = "DarkBeat",
+    model = "DarkBeast",
     prompt,
     negPrompt,
     size,
@@ -303,6 +325,10 @@ async function generateComfyImage({
     upscaleModel = "RealESRGAN_x4plus.pth",
     loras = [],
     steps = 4,
+    cfg = 1.5,
+    denoise = 0.9,
+    scheduler = "sgm_uniform",
+    sampler = "euler",
 }) {
     const clientId = uuidv4()
 
@@ -320,12 +346,16 @@ async function generateComfyImage({
     const workflow = buildDynamicWorkflow({
         prompt,
         negPrompt,
-        modelKey: "DarkBeast",
-        base64images: base64images,
+        modelKey: model,
+        base64images,
         loras,
         width,
         height,
         steps,
+        cfg,
+        denoise,
+        scheduler,
+        sampler,
     })
 
     // Queue the prompt
@@ -731,4 +761,8 @@ module.exports = {
     extractLLMText,
     isComfyUIReady,
     COMFY_BASE_URL,
+    MODELS,
+    LORAS,
+    SCHEDULERS,
+    SAMPLERS,
 }

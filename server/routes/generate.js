@@ -82,11 +82,13 @@ router.post("/generate", async (req, res) => {
     const enableBase64Output = req.body.enable_base64_output === true;
     const resetCache         = req.body.resetCache === true;
     const mode               = req.body.mode
-    const model              = req.body.model 
+    const model              = req.body.model
     const loras              = req.body.loras
     const steps              = req.body.steps
     const cfg                = req.body.cfg
-    const denoise             = req.body.denoise
+    const denoise            = req.body.denoise
+    const scheduler          = req.body.scheduler
+    const sampler            = req.body.sampler
 
     if (!prompt) return res.status(400).json({ error: "prompt is required" });
 
@@ -219,14 +221,20 @@ router.post("/generate", async (req, res) => {
     } else {
       let [width, height] = size.split('*')
       result = await comfyui.generateComfyImage({
-        images: compiled.images,
-        prompt: compiled.rawPrompt,
-        negPrompt: negPrompt,
+        images:    compiled.images,
+        prompt:    compiled.rawPrompt,
+        negPrompt,
         size,
-        loras: loras,
-        steps: steps,
-        model
+        model:    model   || "DarkBeast",
+        loras:    loras   || [],
+        steps:    steps   != null ? steps   : 4,
+        cfg:       cfg       != null ? cfg       : 1.5,
+        denoise:   denoise   != null ? denoise   : 0.9,
+        scheduler: scheduler || "sgm_uniform",
+        sampler:   sampler   || "euler",
       })
+
+      imageUrl = extractImageUrlFromResult(result)
     }
     // ── Persist generated image as an asset ────────────────────────────────
     // The generated image is a new photo entering the system — save locally and register.

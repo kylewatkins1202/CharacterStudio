@@ -60,6 +60,14 @@ export default function App() {
   const [mode, setMode] = useState('wavespeed')
   // Raw negative prompt typed by user
   const [negPrompt, setNegPrompt] = useState("")
+  // Local (ComfyUI) generation options — defaults match buildDynamicWorkflow
+  const [localModel,   setLocalModel]   = useState("DarkBeast")
+  const [localSteps,   setLocalSteps]   = useState(4)
+  const [localCfg,     setLocalCfg]     = useState(1.5)
+  const [localDenoise, setLocalDenoise] = useState(0.9)
+  const [localLoras,     setLocalLoras]     = useState([])
+  const [localScheduler, setLocalScheduler] = useState("sgm_uniform")
+  const [localSampler,   setLocalSampler]   = useState("euler")
 
   // Max reference images allowed by the current mode (null = unlimited)
   const maxReferenceImages = mode === 'local' ? 1 : null;
@@ -319,6 +327,13 @@ export default function App() {
           referenceImages={referenceImages}
           setReferenceImages={setReferenceImages}
           maxReferenceImages={maxReferenceImages}
+          localModel={localModel}     setLocalModel={setLocalModel}
+          localSteps={localSteps}     setLocalSteps={setLocalSteps}
+          localCfg={localCfg}         setLocalCfg={setLocalCfg}
+          localDenoise={localDenoise} setLocalDenoise={setLocalDenoise}
+          localLoras={localLoras}         setLocalLoras={setLocalLoras}
+          localScheduler={localScheduler} setLocalScheduler={setLocalScheduler}
+          localSampler={localSampler}     setLocalSampler={setLocalSampler}
           resetCache={resetCache} setResetCache={setResetCache}
           onGenerated={handleGenerated}
         />

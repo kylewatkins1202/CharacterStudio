@@ -3,6 +3,7 @@ import { computeSize, estimateCost, extractImageUrl } from "../lib/utils";
 import { ASPECT_RATIOS } from "../lib/constants";
 import { PromptInput } from "./PromptInput";
 import { ReferenceImageInput } from "./ReferenceImageInput";
+import { LocalOptions } from "./LocalOptions";
 import { colors, font, radius, fieldLabel as FL } from "../theme";
 import { useState } from "react";
 
@@ -44,6 +45,13 @@ export function GeneratePage({
   compiled, setCompiled,
   referenceImages, setReferenceImages,
   maxReferenceImages,
+  localModel,   setLocalModel,
+  localSteps,   setLocalSteps,
+  localCfg,     setLocalCfg,
+  localDenoise, setLocalDenoise,
+  localLoras,     setLocalLoras,
+  localScheduler, setLocalScheduler,
+  localSampler,   setLocalSampler,
   resetCache, setResetCache,
   mode, setMode,
   negPrompt, setNegPrompt,
@@ -70,15 +78,22 @@ export function GeneratePage({
     // Set compiled to null
     setCompiled(null);
 
-    let model = 1
     try {
       // Request body
       const body = {
         prompt,
         negPrompt: negPrompt ?? '',
-        mode: mode,
-        ...(mode === 'local' && {model: model}),
+        mode,
         size: computedSize,
+        ...(mode === 'local' && {
+          model:   localModel,
+          steps:   localSteps,
+          cfg:     localCfg,
+          denoise:    localDenoise,
+          loras:      localLoras,
+          scheduler:  localScheduler,
+          sampler:    localSampler,
+        }),
         // Existing assets picked from the library — resolved server-side by ID
         referenceAssetIds:  referenceImages.filter((i) => i.assetId).map((i) => ({ id: i.assetId, purpose: i.purpose })),
         // New base64 uploads — creates an asset record on the backend
@@ -186,6 +201,19 @@ export function GeneratePage({
           </label>
           <ReferenceImageInput images={referenceImages} onChange={setReferenceImages} maxImages={maxReferenceImages} />
         </div>
+
+        {/* Local ComfyUI options */}
+        {mode === 'local' && (
+          <LocalOptions
+            model={localModel}     onModelChange={setLocalModel}
+            steps={localSteps}     onStepsChange={setLocalSteps}
+            cfg={localCfg}         onCfgChange={setLocalCfg}
+            denoise={localDenoise} onDenoiseChange={setLocalDenoise}
+            loras={localLoras}           onLorasChange={setLocalLoras}
+            scheduler={localScheduler}   onSchedulerChange={setLocalScheduler}
+            sampler={localSampler}       onSamplerChange={setLocalSampler}
+          />
+        )}
 
         {/* Aspect ratio */}
         <div>
