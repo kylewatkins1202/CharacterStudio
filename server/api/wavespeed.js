@@ -161,7 +161,7 @@ async function generateSeedreamEdit({
         let id = response?.data?.data?.id
 
         // For models that require polling, wrap the request in a retry loop
-        const maxRetries = 20
+        const maxRetries = 45
         const retryDelay = 3000
         
         let attempt = 0
