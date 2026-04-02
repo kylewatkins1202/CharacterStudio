@@ -29,11 +29,12 @@ const VISION_MODEL = process.env.VISION_MODEL || "google/gemini-2.5-flash";
 
 const COST_PER_MEGAPIXEL = 0.06;
 
-function estimateCost(sizeStr) {
-  if (!sizeStr) return null;
-  const [w, h] = sizeStr.split("*").map(Number);
-  if (!w || !h) return null;
-  return ((w * h) / 1_000_000 * COST_PER_MEGAPIXEL).toFixed(4);
+function estimateCost(model, {usedLLM = false, useVision = false} = {}) {
+  const modelCost = wavespeed.MODELS[model].cost 
+  const llmCost = usedLLM ? wavespeed.LLM_MODELS[LLM_MODEL].cost : 0;
+  const visionCost = useVision ? wavespeed.LLM_MODELS[VISION_MODEL].cost : 0;
+
+  return parseFloat(modelCost) + parseFloat(llmCost) + parseFloat(visionCost);
 }
 
 function extractImageUrlFromResult(result) {
@@ -97,7 +98,8 @@ router.post("/generate", async (req, res) => {
 
     // Get tag keys
     const tagKeys = extractTags(prompt);
-
+    let didCompile = false
+    const useVision = false
     let compiled
     // In wavespeed mode
     if (mode === 'wavespeed') {
@@ -120,8 +122,9 @@ router.post("/generate", async (req, res) => {
           compiled = await compilePrompt({
             prompt, tags: tagList, tagLocks,
             parserOptions: { model: LLM_MODEL },
-            visionOptions: { enable: false, force: false, model: VISION_MODEL }
+            visionOptions: { enable: useVision, force: false, model: VISION_MODEL }
           });
+          compile = true
           await db.cache.setCached(cacheKey, compiled);
         }
       }
@@ -177,7 +180,10 @@ router.post("/generate", async (req, res) => {
     const urlItems = await healReferenceItems(rawUrlItems);
 
     const allReferenceItems     = [...assetIdItems, ...base64Items, ...urlItems];
-    const referenceAssetIds     = allReferenceItems.map((i) => i.id).filter(Boolean);
+    // Store { id, purpose } so the gallery can restore generation-time purposes.
+    const referenceAssetIds     = allReferenceItems
+      .filter((i) => i.id)
+      .map((i) => ({ id: i.id, purpose: i.purpose ?? "" }));
     const uploadedReferenceUrls = allReferenceItems.map((i) => i.url);
 
     // ── Prompt assembly ────────────────────────────────────────────────────
@@ -210,6 +216,7 @@ router.post("/generate", async (req, res) => {
     // ── Generation ─────────────────────────────────────────────────────────
     if (mode === "wavespeed") {
       result = await wavespeed.generateSeedreamEdit({
+        model:              model,
         images:             compiled.images,
         prompt:             compiled.rawPrompt,
         size,
@@ -284,7 +291,7 @@ router.post("/generate", async (req, res) => {
         compiledPrompt:   compiled?.rawPrompt || null,
         compiledImages:   compiled?.images || [],
         size:             size || null,
-        cost:             mode === 'local' ? 0 : estimateCost(size),
+        cost:             mode === 'local' ? 0 : estimateCost(model, {usedLLM: didCompile, useVision: useVision}),
         timestamp:        new Date().toISOString(),
       });
     }

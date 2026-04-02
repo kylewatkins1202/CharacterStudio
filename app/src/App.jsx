@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { api } from "./lib/api";
 import { makeSyntheticResult } from "./lib/utils";
 import { ASPECT_RATIOS } from "./lib/constants";
@@ -60,6 +60,8 @@ export default function App() {
   const [mode, setMode] = useState('wavespeed')
   // Raw negative prompt typed by user
   const [negPrompt, setNegPrompt] = useState("")
+  // Cloud Model
+  const [cloudModel, setCloudModel] = useState("seedream")
   // Local (ComfyUI) generation options — defaults match buildDynamicWorkflow
   const [localModel,   setLocalModel]   = useState("DarkBeast")
   const [localSteps,   setLocalSteps]   = useState(4)
@@ -68,9 +70,10 @@ export default function App() {
   const [localLoras,     setLocalLoras]     = useState([])
   const [localScheduler, setLocalScheduler] = useState("sgm_uniform")
   const [localSampler,   setLocalSampler]   = useState("euler")
+  // Model 
 
   // Max reference images allowed by the current mode (null = unlimited)
-  const maxReferenceImages = mode === 'local' ? 1 : null;
+  const maxReferenceImages = useMemo(() => mode === 'local' ? 3 : null, [mode]);
 
   // Prune reference images down to the limit whenever mode changes
   useEffect(() => {
@@ -145,14 +148,21 @@ export default function App() {
     if (entry.mode === 'local') {
       setMode('local') 
       setNegPrompt(entry?.userNegPrompt ?? '')
+      setLocalModel(entry.model || "DarkBeast")
+      setLocalSteps(entry.steps || 4)
+      setLocalCfg(entry.cfg || 1.5)
+      setLocalDenoise(entry.denoise || 0.9)
+      setLocalLoras(entry.loras || [])
+      setLocalScheduler(entry.scheduler || "sgm_uniform")
+      setLocalSampler(entry.sampler || "euler")
     }
     else {
       setMode('wavespeed')
+      setCloudModel(entry.model || "seedream")
     }
     
     // Restore the original user prompt
     setPrompt(entry.userPrompt);
-    
 
     // Restore reference images (populated server-side from asset IDs)
     if (entry.referenceImages?.length) {
@@ -327,6 +337,7 @@ export default function App() {
           referenceImages={referenceImages}
           setReferenceImages={setReferenceImages}
           maxReferenceImages={maxReferenceImages}
+          cloudModel={cloudModel}   setCloudModel={setCloudModel}
           localModel={localModel}     setLocalModel={setLocalModel}
           localSteps={localSteps}     setLocalSteps={setLocalSteps}
           localCfg={localCfg}         setLocalCfg={setLocalCfg}

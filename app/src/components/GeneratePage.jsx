@@ -6,6 +6,7 @@ import { ReferenceImageInput } from "./ReferenceImageInput";
 import { LocalOptions } from "./LocalOptions";
 import { colors, font, radius, fieldLabel as FL } from "../theme";
 import { useState } from "react";
+import { CloudOptions } from "./CloudOptions";
 
 /**
  * GeneratePage — the main image generation view.
@@ -45,6 +46,7 @@ export function GeneratePage({
   compiled, setCompiled,
   referenceImages, setReferenceImages,
   maxReferenceImages,
+  cloudModel,   setCloudModel,
   localModel,   setLocalModel,
   localSteps,   setLocalSteps,
   localCfg,     setLocalCfg,
@@ -85,7 +87,7 @@ export function GeneratePage({
         negPrompt: negPrompt ?? '',
         mode,
         size: computedSize,
-        ...(mode === 'local' && {
+        ...(mode === 'local' ? {
           model:   localModel,
           steps:   localSteps,
           cfg:     localCfg,
@@ -93,6 +95,8 @@ export function GeneratePage({
           loras:      localLoras,
           scheduler:  localScheduler,
           sampler:    localSampler,
+        } : { 
+          model: cloudModel
         }),
         // Existing assets picked from the library — resolved server-side by ID
         referenceAssetIds:  referenceImages.filter((i) => i.assetId).map((i) => ({ id: i.assetId, purpose: i.purpose })),
@@ -214,6 +218,13 @@ export function GeneratePage({
             sampler={localSampler}       onSamplerChange={setLocalSampler}
           />
         )}
+        {
+          mode === 'wavespeed' && (
+            <CloudOptions
+              model={cloudModel} onModelChange={setCloudModel}
+            />
+          )
+        }
 
         {/* Aspect ratio */}
         <div>

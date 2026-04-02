@@ -85,7 +85,7 @@ export function LocalOptions({
   const [availableSamplers,   setAvailableSamplers]   = useState([]);
 
   useEffect(() => {
-    api.get("/comfyui/options").then((res) => {
+    api.get("/models/comfyui/options").then((res) => {
       if (res.ok) {
         setAvailableModels(res.models);
         setAvailableLoras(res.loras);

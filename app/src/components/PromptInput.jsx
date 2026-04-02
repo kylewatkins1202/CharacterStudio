@@ -54,8 +54,18 @@ export function PromptInput({ value, onChange, tags = [], placeholder, disableTa
   const [activeSug,         setActiveSug]         = useState(0);
   const [focused,           setFocused]           = useState(false);
   const editorRef = useRef(null);
+  // Tracks the last value set by user typing so we can skip the renderToDOM
+  // sync effect and avoid resetting the cursor position mid-type.
+  const lastUserValueRef = useRef(value);
 
   const tagKeys = useMemo(() => disableTags ? new Set() : new Set(tags.map((t) => t.key)), [tags, disableTags]);
+  // Stable primitive key — only changes when tag content actually changes.
+  // Using this as the effect dep prevents spurious effect runs on every render
+  // (React 18 doesn't guarantee useMemo reference stability for Set objects).
+  const tagKeysKey = useMemo(
+    () => (disableTags ? '' : tags.map((t) => t.key).sort().join(',')),
+    [tags, disableTags]
+  );
 
   const filtered = mentionQuery !== null
     ? tags.filter((t) => t.key.toLowerCase().includes(mentionQuery.toLowerCase())).slice(0, 8)
@@ -96,15 +106,79 @@ export function PromptInput({ value, onChange, tags = [], placeholder, disableTa
     }
   };
 
-  // Force re-render whenever tagKeys changes (e.g. disableTags toggled) so pills
-  // are stripped or restored even when the serialized value hasn't changed.
-  useEffect(() => {
-    renderToDOM(value);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tagKeys]);
+  // ── Cursor save / restore ───────────────────────────────────────────────────
 
-  // Sync value → DOM only when they diverge (avoids clobbering cursor mid-type)
+  /** Character offset of the caret in the serialised string, or null if editor isn't focused. */
+  const getCursorOffset = () => {
+    const el  = editorRef.current;
+    const sel = window.getSelection();
+    if (!el || !sel?.rangeCount || !el.contains(sel.getRangeAt(0).startContainer)) return null;
+    try {
+      const r = document.createRange();
+      r.setStart(el, 0);
+      r.setEnd(sel.getRangeAt(0).startContainer, sel.getRangeAt(0).startOffset);
+      const tmp = document.createElement("div");
+      tmp.appendChild(r.cloneContents());
+      return serializeDom(tmp).length;
+    } catch {
+      return null;
+    }
+  };
+
+  /** Moves the caret to a character offset within the serialised string. */
+  const setCursorOffset = (offset) => {
+    if (offset === null) return;
+    const el = editorRef.current;
+    if (!el) return;
+    let remaining = offset;
+    const walk = (node) => {
+      for (const child of node.childNodes) {
+        if (child.nodeType === Node.TEXT_NODE) {
+          if (remaining <= child.textContent.length) {
+            const r = document.createRange();
+            r.setStart(child, remaining);
+            r.collapse(true);
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(r);
+            return true;
+          }
+          remaining -= child.textContent.length;
+        } else if (child.dataset?.tag) {
+          remaining -= 1 + child.dataset.tag.length; // "@key"
+          if (remaining <= 0) {
+            const idx = Array.from(node.childNodes).indexOf(child);
+            const r = document.createRange();
+            r.setStart(node, idx + 1);
+            r.collapse(true);
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(r);
+            return true;
+          }
+        } else {
+          if (walk(child)) return true;
+        }
+      }
+      return false;
+    };
+    if (!walk(el)) moveCursorToEnd();
+  };
+
+  // Force re-render whenever tag content changes (e.g. disableTags toggled) so pills
+  // are stripped or restored even when the serialised value hasn't changed.
+  // tagKeysKey is a stable string so this only fires on real tag changes, not every render.
+  // Save and restore cursor so renderToDOM doesn't reset the caret mid-keystroke.
   useEffect(() => {
+    const offset = getCursorOffset();
+    renderToDOM(value);
+    if (offset !== null) setCursorOffset(offset);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tagKeysKey]);
+
+  // Sync value → DOM only when the change is programmatic (not from user typing).
+  useEffect(() => {
+    if (value === lastUserValueRef.current) return;
     const el = editorRef.current;
     if (!el) return;
     if (serializeDom(el) !== value) {
@@ -148,6 +222,7 @@ export function PromptInput({ value, onChange, tags = [], placeholder, disableTa
     const el = editorRef.current;
     if (!el) return;
     const str    = serializeDom(el);
+    lastUserValueRef.current = str;
     onChange(str);
     const before = getBeforeCursor();
     const atIdx  = before.lastIndexOf("@");

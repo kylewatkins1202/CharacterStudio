@@ -24,8 +24,31 @@ const WAVESPEED_BASE_URL = "https://api.wavespeed.ai/api/v3"
 const WAVESPEED_UPLOAD_URL = `${WAVESPEED_BASE_URL}/media/upload/binary`
 const WAVESPEED_SEEDREAM_URL = `${WAVESPEED_BASE_URL}/bytedance/seedream-v4.5`
 const WAVESPEED_SEEDREAM_EDIT_SEQUENTIAL_URL = `${WAVESPEED_BASE_URL}/bytedance/seedream-v4.5/edit-sequential`
+const WAVESPEED_QWEN_URL = `${WAVESPEED_BASE_URL}/wavespeed-ai/qwen-image-2.0`
+const WAVESPEED_QWEN_EDIT_URL = `${WAVESPEED_BASE_URL}/wavespeed-ai/qwen-image-2.0/edit`
 const WAVESPEED_ANY_LLM_URL = `${WAVESPEED_BASE_URL}/wavespeed-ai/any-llm`
 const WAVESPEED_ANY_LLM_VISION_URL = `${WAVESPEED_BASE_URL}/wavespeed-ai/any-llm/vision`
+const WAVESPEED_POLLING = `https://api.wavespeed.ai/api/v3/predictions/`
+const MODELS = {
+    "seedream": {
+        name: "Seedream v4.5",
+        editLink: WAVESPEED_SEEDREAM_EDIT_SEQUENTIAL_URL,
+        cost: '.04'
+    },
+    "qwen-image-2.0": {
+        name: "Qwen Image 2.0",
+        link: "https://www.wavespeed.ai/models/qwen-image-2.0",
+        editLink: WAVESPEED_QWEN_EDIT_URL,
+        cost: '.03',
+        poll: true
+    }
+}
+
+const LLM_MODELS = {
+    "google/gemini-2.5-flash": {
+        cost: '.001'
+    }
+}
 
 if (!WAVESPEED_API_KEY) {
     console.warn("Warning: WAVESPEED_API_KEY is not set.")
@@ -94,6 +117,7 @@ async function uploadBufferToWaveSpeed(buffer, filename, mimeType) {
  * @returns {Promise<unknown>} Raw WaveSpeed API response body.
  */
 async function generateSeedreamEdit({
+    model = "seedream",
     images,
     prompt,
     size,
@@ -111,13 +135,52 @@ async function generateSeedreamEdit({
         payload.size = size
     }
 
-    const response = await axios.post(images.length === 0 ? WAVESPEED_SEEDREAM_URL: WAVESPEED_SEEDREAM_EDIT_SEQUENTIAL_URL, payload, {
+    // Get text to image if no images provided, otherwise image edit
+    let textToImage = images.length === 0
+
+    let link
+
+    if (textToImage) {
+        link = MODELS[model]?.link || WAVESPEED_SEEDREAM_URL
+    } else {
+        link = MODELS[model]?.editLink || WAVESPEED_SEEDREAM_EDIT_SEQUENTIAL_URL
+    }
+
+    let request = async () => axios.post(link, payload, {
         headers: getAuthHeaders({
             "Content-Type": "application/json"
         }),
         maxBodyLength: Infinity,
         maxContentLength: Infinity
     })
+    let response = await request()
+
+    if (MODELS[model]?.poll) {
+        console.log(response?.data?.data?.urls?.get)
+        let url = response?.data?.data?.urls?.get  
+        let id = response?.data?.data?.id
+
+        // For models that require polling, wrap the request in a retry loop
+        const maxRetries = 20
+        const retryDelay = 3000
+        
+        let attempt = 0
+        
+        for (; attempt < maxRetries; attempt++) {
+            response = await axios.get(WAVESPEED_POLLING + id + '/result', {
+                headers: getAuthHeaders({
+                    "Content-Type": "application/json"
+                })
+            })
+
+            if (response?.data?.data?.status === "completed") {
+                return response.data
+            }
+
+            // Wait before retrying
+            await new Promise((resolve) => setTimeout(resolve, retryDelay))
+        }
+    }
 
     return response.data
 }
@@ -305,5 +368,7 @@ module.exports = {
     WAVESPEED_UPLOAD_URL,
     WAVESPEED_SEEDREAM_EDIT_SEQUENTIAL_URL,
     WAVESPEED_ANY_LLM_URL,
-    WAVESPEED_ANY_LLM_VISION_URL
+    WAVESPEED_ANY_LLM_VISION_URL,
+    MODELS,
+    LLM_MODELS
 }

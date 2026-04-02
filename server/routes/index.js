@@ -27,5 +27,6 @@ router.use(require("./gallery"));
 router.use(require("./generate"));
 router.use(require("./compile"));
 router.use(require("./settings"));
+router.use(require("./models"));
 
 module.exports = router;

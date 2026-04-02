@@ -34,6 +34,11 @@ const MODELS = {
         base: "flux2klein",
         name: "flux-2-klein-9b-Q5_K_S.gguf"
     },
+    'Flux2Klein': {
+        type: 'safetensors',
+        base: "flux2klein",
+        name: "flux-2-klein-9b-fp8.safetensors",
+    }
 }
 
 const LORAS = {

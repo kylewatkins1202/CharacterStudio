@@ -47,11 +47,17 @@ async function populateEntry(entry) {
   // Resolve reference asset IDs → [{ url, purpose }]
   let referenceImages = entry.referenceImages || [];   // legacy fallback
   if (entry.referenceAssetIds?.length) {
-    const assets = await db.assets.getAssetsByIds(entry.referenceAssetIds);
-    const healed = await Promise.all(assets.map(healAsset));
-    referenceImages = healed
+    // Support both old format (string[]) and new format ({ id, purpose }[])
+    const items      = entry.referenceAssetIds.map((item) =>
+      typeof item === "string" ? { id: item, purpose: "" } : item
+    );
+    const ids        = items.map((i) => i.id);
+    const purposeMap = Object.fromEntries(items.map((i) => [i.id, i.purpose]));
+    const assets     = await db.assets.getAssetsByIds(ids);
+    const healed     = await Promise.all(assets.map(healAsset));
+    referenceImages  = healed
       .filter(Boolean)
-      .map((a) => ({ url: a.url, purpose: a.purpose || "composition" }));
+      .map((a) => ({ url: a.url, purpose: purposeMap[a.id] ?? a.purpose ?? "" }));
   }
 
   return { ...entry, imageUrl, localUrl, referenceImages, hidden };
