@@ -19,6 +19,11 @@ router.use("/assets", express.static(db.ASSETS_DIR));
 // Health check
 router.get("/health", (req, res) => res.json({ ok: true }));
 
+// Feature flags
+router.get("/config", (req, res) => res.json({
+  localGenerationEnabled: process.env.LOCAL_GENERATION === "true",
+}));
+
 // Route groups
 router.use(require("./assets"));
 router.use(require("./tags"));

@@ -173,7 +173,7 @@ async function generateSeedreamEdit({
                 })
             })
 
-            if (response?.data?.data?.status === "completed") {
+            if (response?.data?.data?.status === "completed" || response?.data?.data?.status === "failed") {
                 return response.data
             }
 

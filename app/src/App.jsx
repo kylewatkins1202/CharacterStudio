@@ -109,8 +109,14 @@ export default function App() {
     } catch {}
   }, []);
 
-  // Load tags and gallery count once on mount
-  useEffect(() => { loadTags(); loadGalleryCount(); }, [loadTags, loadGalleryCount]);
+  const [localGenerationEnabled, setLocalGenerationEnabled] = useState(false);
+
+  // Load tags, gallery count, and feature config once on mount
+  useEffect(() => {
+    loadTags();
+    loadGalleryCount();
+    api.get("/config").then((res) => { if (res.localGenerationEnabled) setLocalGenerationEnabled(true); }).catch(() => {});
+  }, [loadTags, loadGalleryCount]);
 
   // ── Cross-page callbacks ──────────────────────────────────────────────────────
 
@@ -326,6 +332,7 @@ export default function App() {
         <GeneratePage
           tags={tags}
           toast={toast}
+          localGenerationEnabled={localGenerationEnabled}
           prompt={prompt}         setPrompt={setPrompt}
           negPrompt={negPrompt}   setNegPrompt={setNegPrompt}
           mode={mode}             setMode={setMode}

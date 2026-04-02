@@ -57,6 +57,7 @@ export function GeneratePage({
   resetCache, setResetCache,
   mode, setMode,
   negPrompt, setNegPrompt,
+  localGenerationEnabled,
   onGenerated,
 }) {
   const computedSize = computeSize(aspect, baseSize);
@@ -156,7 +157,7 @@ export function GeneratePage({
               background:   loading || mode !== "wavespeed" ? "#111" : colors.primary,
               color:        loading || mode !== "wavespeed" ? colors.textGhost : colors.primaryText,
               border:       "none",
-              borderRadius: `${radius.md}px ${0}px ${0}px ${radius.md}px`,
+              borderRadius: (localGenerationEnabled ? `${radius.md}px ${0}px ${0}px ${radius.md}px` : radius.md),
               fontFamily:   font.mono,
               fontSize:     font.sizeLg,
               fontWeight:   600,
@@ -167,25 +168,27 @@ export function GeneratePage({
           >
             WaveSpeed
           </button>
-          <button
-            onClick={() => setMode('local')}
-            disabled={loading}
-            style={{
-              padding:      "10px 32px",
-              background:   loading || mode !== "local" ? "#111" : colors.primary,
-              color:        loading || mode !== "local" ? colors.textGhost : colors.primaryText,
-              border:       "none",
-              borderRadius: `${0}px ${radius.md}px ${radius.md}px ${0}px`,
-              fontFamily:   font.mono,
-              fontSize:     font.sizeLg,
-              fontWeight:   600,
-              cursor:       loading ? "not-allowed" : "pointer",
-              transition:   "all 0.2s",
-              whiteSpace:   "nowrap",
-            }}
-          >
-            Local
-          </button>
+          {localGenerationEnabled && (
+            <button
+              onClick={() => setMode('local')}
+              disabled={loading}
+              style={{
+                padding:      "10px 32px",
+                background:   loading || mode !== "local" ? "#111" : colors.primary,
+                color:        loading || mode !== "local" ? colors.textGhost : colors.primaryText,
+                border:       "none",
+                borderRadius: `${0}px ${radius.md}px ${radius.md}px ${0}px`,
+                fontFamily:   font.mono,
+                fontSize:     font.sizeLg,
+                fontWeight:   600,
+                cursor:       loading ? "not-allowed" : "pointer",
+                transition:   "all 0.2s",
+                whiteSpace:   "nowrap",
+              }}
+            >
+              Local
+            </button>
+          )}
         </div>
       </div>
 

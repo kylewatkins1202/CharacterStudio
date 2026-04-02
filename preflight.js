@@ -1,18 +1,27 @@
 // preflight.js
+require("dotenv").config();
 const { setupPython } = require("./setup-python");
 const { setupComfyUI } = require("./setup-comfyui");
 const { ensureModelsDownloaded } = require("./setup-models");
+
+const localGenerationEnabled = process.env.LOCAL_GENERATION === "true";
 
 /**
  * Run startup setup tasks that should complete before the app launches.
  *
  * This does NOT start ComfyUI itself.
  * It only ensures:
- * 1. ComfyUI repo exists
- * 2. Python deps are installed
- * 3. Models are downloaded
+ * 1. ComfyUI repo exists (skipped when LOCAL_GENERATION=false)
+ * 2. Python deps are installed (skipped when LOCAL_GENERATION=false)
+ * 3. Models are downloaded (skipped when LOCAL_GENERATION=false)
  */
 async function runPreflight() {
+  if (!localGenerationEnabled) {
+    console.log("LOCAL_GENERATION is disabled — skipping Python, ComfyUI, and model setup.");
+    console.log("Preflight complete.");
+    return;
+  }
+
   console.log("Setting up bundled Python...");
   await setupPython();
 

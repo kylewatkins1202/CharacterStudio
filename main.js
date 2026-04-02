@@ -3,7 +3,13 @@ const path = require("path");
 const { spawn, execSync } = require("child_process");
 const { startComfyUI, stopComfyUI } = require("./comfyui");
 
+const envPath = process.env.NODE_ENV === "production"
+  ? path.join(process.resourcesPath, ".env")
+  : path.join(__dirname, ".env");
+require("dotenv").config({ path: envPath });
+
 const isDev = process.env.NODE_ENV === "development";
+const localGenerationEnabled = process.env.LOCAL_GENERATION === "true";
 const PORT = 4989;
 
 let mainWindow;
@@ -78,8 +84,10 @@ function killServer() {
 
 async function bootstrap() {
   try {
-    console.log("Starting ComfyUI...");
-    await startComfyUI();
+    if (localGenerationEnabled) {
+      console.log("Starting ComfyUI...");
+      await startComfyUI();
+    }
 
     if (!isDev) {
       console.log("Starting local server...");
@@ -101,7 +109,7 @@ app.whenReady().then(bootstrap);
 
 app.on("window-all-closed", () => {
   killServer();
-  stopComfyUI();
+  if (localGenerationEnabled) stopComfyUI();
 
   if (process.platform !== "darwin") {
     app.quit();
@@ -110,5 +118,5 @@ app.on("window-all-closed", () => {
 
 app.on("before-quit", () => {
   killServer();
-  stopComfyUI();
+  if (localGenerationEnabled) stopComfyUI();
 });
