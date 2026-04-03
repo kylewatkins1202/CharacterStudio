@@ -15,6 +15,8 @@ const db      = require("../db");
 const { uploadBufferToWaveSpeed } = require("../api/wavespeed");
 const { parseBase64Image }        = require("../utils/imageCollage");
 const { saveAssetLocally }        = require("../utils/assets");
+const path = require("path");
+const fs = require("fs");
 
 const router = express.Router();
 
@@ -90,6 +92,18 @@ router.patch("/assets/:id", async (req, res) => {
 
 router.delete("/assets/:id", async (req, res) => {
   try {
+    const asset = await db.assets.getAsset(req.params.id);
+
+    const filePath = path.join(db.ASSETS_DIR, asset?.assetPath);
+
+    if (filePath) {
+      try {
+        await fs.promises.unlink(filePath);
+      } catch (err) {
+        console.warn(`Failed to delete local asset file at ${filePath}:`, err);
+      }
+    }
+
     const deleted = await db.assets.deleteAsset(req.params.id);
     if (!deleted) return res.status(404).json({ error: `asset not found: ${req.params.id}` });
 
@@ -106,6 +120,14 @@ router.delete("/assets/:id", async (req, res) => {
             return t;
           })
         )
+    );
+
+    const galleryEntries = await db.gallery.getGalleryEntries();  
+    // Delete gallery entries with imageAssetId matching the deleted asset
+    await Promise.all(
+      galleryEntries
+        .filter((entry) => entry.imageAssetId === req.params.id)
+        .map((entry) => db.gallery.deleteGalleryEntry(entry.id))
     );
 
     res.json({ ok: true, deleted: req.params.id });

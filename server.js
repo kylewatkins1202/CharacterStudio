@@ -9,7 +9,7 @@ const path = require("path");
 
 // In production the .env lives next to the packaged binary; in dev it's at the project root.
 const envPath = process.env.NODE_ENV === "production"
-  ? path.join(process.resourcesPath, ".env")
+  ? path.join(process.env.RESOURCES_PATH || process.resourcesPath, ".env")
   : path.join(__dirname, ".env");
 
 // Load environment variables before any other module reads process.env
@@ -38,22 +38,32 @@ app.use(express.json({ limit: JSON_BODY_LIMIT }));
 // All API routes live under /api
 app.use("/api", require("./server/routes"));
 
+// Serve the built React frontend in production
+if (process.env.NODE_ENV !== "development") {
+  const frontendDist = path.join(__dirname, "app", "dist");
+  app.use(express.static(frontendDist));
+  app.get("/{*splat}", (_req, res) => res.sendFile(path.join(frontendDist, "index.html")));
+}
+
 // Initialize data directories and seed JSON files before accepting connections
-db.setupDb()
+const ready = db.setupDb()
   .then(async () => {
     // Load the persisted API key and activate it — falls back to the env var if unset
     const saved = await db.settings.getSettings();
     setApiKey(saved.wavespeedApiKey || process.env.WAVESPEED_API_KEY || "");
   })
-  .then(() => {
+  .then(() => new Promise((resolve) => {
     app.listen(PORT, () => {
       console.log(`\n  🎨  Character Studio`);
       console.log(`  ➜  API:    http://localhost:${PORT}/api`);
       console.log(`  ➜  Client: http://localhost:5173  (dev)\n`);
+      resolve();
     });
-  })
+  }))
   .catch((error) => {
     // A db init failure is unrecoverable — log and exit so the process manager restarts
     console.error("Failed to initialize:", error);
     process.exit(1);
   });
+
+module.exports = { ready };

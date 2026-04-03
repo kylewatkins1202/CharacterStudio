@@ -23,6 +23,9 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale }) {
   const [loading,    setLoading]    = useState(true);
   // When true, hidden images appear in the grid
   const [showHidden, setShowHidden] = useState(false);
+
+  const [showAll, setShowAll] = useState(false);
+
   // Set of entry ids that the user has temporarily un-blurred
   const [revealed,   setRevealed]   = useState(new Set());
   // URL of the image currently open in the lightbox (null = closed)
@@ -94,10 +97,10 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale }) {
   const visibleEntries = entries.filter((e) => showHidden ? true : !e.hidden);
 
   return (
-    <div style={{ maxWidth: 940, margin: "0 auto", padding: "40px 24px" }}>
+    <div style={{ maxWidth: 1080, margin: "0 auto", padding: "40px 24px" }}>
       {lightboxSrc && <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />}
       {/* Page header */}
-      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 32 }}>
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 32, position: 'fixed', background: colors.surface, zIndex: 100, top: 54, left: 0, right: 0, padding: "24px", borderBottom: `1px solid ${colors.border}` }}>
         <div>
           <h1 style={{ fontFamily: font.serif, fontSize: font.sizeHeading, fontWeight: 700, color: colors.textHigh, margin: 0, letterSpacing: "-0.02em" }}>
             Gallery
@@ -127,6 +130,24 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale }) {
               {showHidden ? "Hide hidden" : `Show hidden (${hiddenCount})`}
             </button>
           )}
+          {showHidden && (
+            <button
+              onClick={() => setShowAll((p) => !p)}
+              style={{
+                padding:      "6px 14px",
+                borderRadius: radius.md - 1,
+                cursor:       "pointer",
+                border:       `1px solid ${showHidden ? colors.textMuted : colors.borderStrong}`,
+                background:   showHidden ? "#1a1a1a" : "transparent",
+                color:        showHidden ? "#e0e0e0" : colors.textMuted,
+                fontFamily:   font.mono,
+                fontSize:     font.sizeMd,
+                transition:   "all 0.15s",
+              }}
+            >
+              {showAll ? "Hide all hidden" : `Show all hidden`}
+            </button>
+          )}
           {entries.length > 0 && (
             <div style={{ textAlign: "right" }}>
               <div style={{ color: colors.borderStrong, fontFamily: font.mono, fontSize: font.sizeSm, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 2 }}>Total cost</div>
@@ -146,7 +167,7 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale }) {
           {entries.length === 0 ? "No images yet — generate one to get started" : "All images are hidden"}
         </div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(310px, 1fr))", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(350px, 1fr))", gap: 12, marginTop: 90 }}>
           {visibleEntries.map((entry) => {
             const isRevealed = revealed.has(entry.id);
             const isHidden   = entry.hidden;
@@ -163,16 +184,16 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale }) {
                   <img
                     src={entry.localUrl || entry.imageUrl}
                     alt=""
-                    onClick={() => { if (!isHidden || isRevealed) setLightboxSrc(entry.localUrl || entry.imageUrl); }}
+                    onClick={() => { if (!isHidden || isRevealed || showAll) setLightboxSrc(entry.localUrl || entry.imageUrl); }}
                     style={{
                       width:      "100%",
                       display:    "block",
-                      filter:     isHidden && !isRevealed ? "blur(24px)" : "none",
+                      filter:     (!isHidden || isRevealed || showAll) ? "none" : "blur(24px)",
                       transition: "filter 0.3s",
-                      cursor:     (!isHidden || isRevealed) ? "zoom-in" : "default",
+                      cursor:     (!isHidden || isRevealed || showAll) ? "zoom-in" : "default",
                     }}
                   />
-                  {isHidden && !isRevealed && (
+                  {isHidden && !isRevealed && !showAll && (
                     <div
                       onClick={() => toggleReveal(entry.id)}
                       style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", gap: 6 }}

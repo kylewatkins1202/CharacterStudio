@@ -1,6 +1,5 @@
 const { app, BrowserWindow, shell, ipcMain } = require("electron");
 const path = require("path");
-const { spawn, execSync } = require("child_process");
 const { startComfyUI, stopComfyUI } = require("./comfyui");
 
 const envPath = process.env.NODE_ENV === "production"
@@ -13,18 +12,9 @@ const localGenerationEnabled = process.env.LOCAL_GENERATION === "true";
 const PORT = 4989;
 
 let mainWindow;
-let serverProcess;
 
 function startServer() {
-  serverProcess = spawn("node", ["server.js"], {
-    cwd: __dirname,
-    env: { ...process.env, PORT },
-    stdio: "inherit",
-  });
-
-  serverProcess.on("error", (err) => {
-    console.error("Server failed to start:", err);
-  });
+  return require("./server").ready;
 }
 
 function createWindow() {
@@ -54,9 +44,11 @@ function createWindow() {
     ? "http://localhost:5173"
     : `http://localhost:${PORT}`;
 
-  setTimeout(() => {
-    mainWindow.loadURL(url);
-  }, isDev ? 0 : 1500);
+  mainWindow.loadURL(url);
+
+  mainWindow.webContents.on("before-input-event", (_, input) => {
+    if (input.key === "F12") mainWindow.webContents.toggleDevTools();
+  });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
@@ -68,20 +60,6 @@ function createWindow() {
   });
 }
 
-function killServer() {
-  if (!serverProcess) return;
-
-  try {
-    if (process.platform === "win32") {
-      execSync(`taskkill /pid ${serverProcess.pid} /f /t`);
-    } else {
-      serverProcess.kill("SIGTERM");
-    }
-  } catch {}
-
-  serverProcess = null;
-}
-
 async function bootstrap() {
   try {
     if (localGenerationEnabled) {
@@ -91,7 +69,7 @@ async function bootstrap() {
 
     if (!isDev) {
       console.log("Starting local server...");
-      startServer();
+      await startServer();
     }
 
     createWindow();
@@ -108,15 +86,10 @@ async function bootstrap() {
 app.whenReady().then(bootstrap);
 
 app.on("window-all-closed", () => {
-  killServer();
   if (localGenerationEnabled) stopComfyUI();
-
-  if (process.platform !== "darwin") {
-    app.quit();
-  }
+  if (process.platform !== "darwin") app.quit();
 });
 
 app.on("before-quit", () => {
-  killServer();
   if (localGenerationEnabled) stopComfyUI();
 });

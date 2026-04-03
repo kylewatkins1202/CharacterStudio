@@ -26,6 +26,8 @@ const WAVESPEED_SEEDREAM_URL = `${WAVESPEED_BASE_URL}/bytedance/seedream-v4.5`
 const WAVESPEED_SEEDREAM_EDIT_SEQUENTIAL_URL = `${WAVESPEED_BASE_URL}/bytedance/seedream-v4.5/edit-sequential`
 const WAVESPEED_QWEN_URL = `${WAVESPEED_BASE_URL}/wavespeed-ai/qwen-image-2.0`
 const WAVESPEED_QWEN_EDIT_URL = `${WAVESPEED_BASE_URL}/wavespeed-ai/qwen-image-2.0/edit`
+const WAVESPEED_QWEN_PRO_URL = `${WAVESPEED_BASE_URL}/wavespeed-ai/qwen-image-2.0-pro`
+const WAVESPEED_QWEN_PRO_EDIT_URL = `${WAVESPEED_BASE_URL}/wavespeed-ai/qwen-image-2.0-pro/edit`
 const WAVESPEED_ANY_LLM_URL = `${WAVESPEED_BASE_URL}/wavespeed-ai/any-llm`
 const WAVESPEED_ANY_LLM_VISION_URL = `${WAVESPEED_BASE_URL}/wavespeed-ai/any-llm/vision`
 const WAVESPEED_POLLING = `https://api.wavespeed.ai/api/v3/predictions/`
@@ -40,9 +42,18 @@ const MODELS = {
     },
     "qwen-image-2.0": {
         name: "Qwen Image 2.0",
-        link: "https://www.wavespeed.ai/models/qwen-image-2.0",
+        link: WAVESPEED_QWEN_URL,
         editLink: WAVESPEED_QWEN_EDIT_URL,
         cost: '.03',
+        poll: true,
+        min: 512,
+        max: 2048
+    },
+    "qwen-image-2.0-pro": {
+        name: "Qwen Image 2.0 Pro",
+        link: WAVESPEED_QWEN_PRO_URL,
+        editLink: WAVESPEED_QWEN_PRO_EDIT_URL,
+        cost: '.07',
         poll: true,
         min: 512,
         max: 2048
@@ -166,8 +177,8 @@ async function generateSeedreamEdit({
         let id = response?.data?.data?.id
 
         // For models that require polling, wrap the request in a retry loop
-        const maxRetries = 45
-        const retryDelay = 3000
+        const maxRetries = 60
+        const retryDelay = 10 * 1000
         
         let attempt = 0
         
