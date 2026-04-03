@@ -5,7 +5,7 @@ import { PromptInput } from "./PromptInput";
 import { ReferenceImageInput } from "./ReferenceImageInput";
 import { LocalOptions } from "./LocalOptions";
 import { colors, font, radius, fieldLabel as FL } from "../theme";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { CloudOptions } from "./CloudOptions";
 
 /**
@@ -60,10 +60,24 @@ export function GeneratePage({
   localGenerationEnabled,
   onGenerated,
 }) {
+  const [wsModels, setWsModels] = useState({});
+
+  useEffect(() => {
+    api.get("/models/wavespeed/options").then((res) => {
+      if (res.ok) setWsModels(res.models);
+    }).catch(() => {});
+  }, []);
+
+  // Clamp baseSize to the selected model's max when cloudModel or wsModels changes
+  useEffect(() => {
+    const max = wsModels[cloudModel]?.max;
+    if (max && baseSize > max) setBaseSize(max);
+  }, [cloudModel, wsModels]);
+
   const computedSize = computeSize(aspect, baseSize);
   const cost         = estimateCost(computedSize);
   const imageUrl     = result ? extractImageUrl(result) : null;
-  
+
   /**
    * Generates image and shows the image and its raw prompt to the user
    * @returns {Promise<void>}
@@ -109,7 +123,7 @@ export function GeneratePage({
       }
 
       // Generate image
-      const res = await api.post("/generate", body);
+      const res = await api.post("/image/generate", body);
 
       // If response is ok 
       if (res.ok) {
@@ -225,6 +239,7 @@ export function GeneratePage({
           mode === 'wavespeed' && (
             <CloudOptions
               model={cloudModel} onModelChange={setCloudModel}
+              models={wsModels}
             />
           )
         }
@@ -278,15 +293,22 @@ export function GeneratePage({
           </label>
           <input
             type="range"
-            min={512}
-            max={8192}
+            min={wsModels[cloudModel]?.min ?? 512}
+            max={wsModels[cloudModel]?.max ?? 8192}
             step={64}
             value={baseSize}
             onChange={(e) => setBaseSize(Number(e.target.value))}
             style={{ width: "100%", accentColor: colors.primary, cursor: "pointer" }}
           />
           <div style={{ display: "flex", justifyContent: "space-between", color: colors.borderStrong, fontFamily: font.mono, fontSize: font.sizeSm, marginTop: 4 }}>
-            <span>512</span><span>2048</span><span>4096</span><span>6144</span><span>8192</span>
+            {(() => {
+              const sliderMin = wsModels[cloudModel]?.min ?? 512;
+              const sliderMax = wsModels[cloudModel]?.max ?? 8192;
+              const mid = Math.round((sliderMin + sliderMax) / 2);
+              const q1  = Math.round((sliderMin + mid) / 2);
+              const q3  = Math.round((mid + sliderMax) / 2);
+              return [sliderMin, q1, mid, q3, sliderMax].map((v) => <span key={v}>{v}</span>);
+            })()}
           </div>
         </div>
 

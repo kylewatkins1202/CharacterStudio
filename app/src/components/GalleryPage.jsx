@@ -16,7 +16,7 @@ import { colors, font, radius } from "../theme";
  *   onAddReference: (imageUrl: string) => void
  * }} props
  */
-export function GalleryPage({ toast, onUsePrompt, onAddReference }) {
+export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale }) {
   // Array of gallery entry objects loaded from the API
   const [entries,    setEntries]    = useState([]);
   // True while the initial load is in-flight
@@ -217,6 +217,14 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference }) {
                         onMouseLeave={(e) => { e.currentTarget.style.borderColor = colors.borderStrong; e.currentTarget.style.color = colors.textMuted; }}
                       >
                         ↑ Use
+                      </button>
+                      <button
+                        onClick={() => onUpscale(entry)}
+                        style={{ padding: "4px 10px", background: "none", border: `1px solid #1e1e1e`, borderRadius: radius.md - 2, color: colors.textMuted, fontFamily: font.mono, fontSize: font.sizeSm, cursor: "pointer", transition: "all 0.15s", whiteSpace: "nowrap" }}
+                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = colors.borderFocus; e.currentTarget.style.color = "#e0e0e0"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#1e1e1e"; e.currentTarget.style.color = colors.textMuted; }}
+                      >
+                        Upscale
                       </button>
                       <button
                         onClick={() => { onAddReference({ id: entry.imageAssetId, url: entry.imageUrl, purpose: "composition" }); toast.add("Added as reference", "success"); }}

@@ -305,4 +305,79 @@ router.post("/generate", async (req, res) => {
   }
 });
 
+// ─── Upscale Route ────────────────────────────────────────────────────────────
+
+function extractUpscaleImageUrl(result) {
+  const d = result?.data || result;
+  return d?.outputs?.[0] || d?.images?.[0] || d?.image_url || d?.url ||
+    result?.outputs?.[0] || result?.images?.[0] || result?.image_url || result?.url || null;
+}
+
+router.post("/upscale", async (req, res) => {
+  try {
+    const imageRef = req.body.image; // { assetId?, src?, url?, isUrl? }
+    const targetResolution = req.body.targetResolution || "4k";
+
+    if (!imageRef) return res.status(400).json({ error: "image is required" });
+
+    // Resolve image reference to a URL
+    let imageUrl;
+    if (imageRef.assetId) {
+      const asset = await db.assets.getAsset(imageRef.assetId);
+      if (!asset) return res.status(400).json({ error: "Asset not found" });
+      const healed = await healAsset(asset);
+      imageUrl = healed?.url;
+    } else if (imageRef.isUrl) {
+      imageUrl = imageRef.url || imageRef.src;
+    } else if (imageRef.src) {
+      // base64 upload
+      const parsed = parseBase64Image(imageRef.src);
+      const filename = `upscale-input-${Date.now()}.${parsed.ext}`;
+      const uploaded = await wavespeed.uploadBufferToWaveSpeed(parsed.buffer, filename, parsed.mimeType);
+      imageUrl = uploaded.url;
+    }
+
+    if (!imageUrl) return res.status(400).json({ error: "Could not resolve image URL" });
+
+    const result = await wavespeed.upscaleImage({ imageUrl, targetResolution });
+    const upscaledUrl = extractUpscaleImageUrl(result);
+
+    if (!upscaledUrl) return res.status(500).json({ error: "Upscale did not return an image URL" });
+
+    // Save locally
+    let localUrl = null;
+    let imageAssetId = null;
+    
+    try {
+      // Attempt to download the upscaled image and save it locally as an asset for future healing if the Wavespeed URL expires. This is a best-effort attempt; if it fails we still return the upscaled URL.
+      const imgRes = await fetch(upscaledUrl);
+      if (imgRes.ok) {
+        const buffer = Buffer.from(await imgRes.arrayBuffer());
+        const filename = `upscaled-${targetResolution}-${Date.now()}.png`;
+        const contentType = imgRes.headers.get("content-type") || "image/jpeg";
+        const ext         = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
+        const { localPath, assetPath } = await saveAssetLocally("upscaled", "upscale", filename, buffer);
+
+        // Create asset
+        const imageAsset = await db.assets.createAsset({
+            id:        crypto.randomUUID(),
+            url:       upscaledUrl,
+            localPath,
+            assetPath,
+            filename,
+            mimeType:  contentType,
+            hidden:    false,
+            timestamp: new Date().toISOString(),
+          });
+          imageAssetId = imageAsset.id;
+        localUrl = `/api/assets/${assetPath}`;
+      }
+    } catch {}
+
+    res.json({ ok: true, url: upscaledUrl, localUrl });
+  } catch (error) {
+    res.status(500).json({ error: "Upscale failed", details: error.message });
+  }
+});
+
 module.exports = router;

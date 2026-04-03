@@ -3,43 +3,43 @@ import { api } from "../lib/api";
 import { colors, font, radius, fieldLabel as FL } from "../theme";
 
 /**
- * CloudOptions — model, lora, steps, cfg, and denoise controls for local ComfyUI mode.
+ * CloudOptions — model selector for WaveSpeed cloud generation.
  *
  * @param {{
  *   model: string, onModelChange: Function,
- *   steps: number, onStepsChange: Function,
- *   cfg: number,   onCfgChange: Function,
- *   denoise: number, onDenoiseChange: Function,
- *   loras: Array<{loraKey: string, strength: number}>, onLorasChange: Function,
+ *   models?: { [key: string]: { name: string, min: number, max: number } },
  * }} props
  */
 export function CloudOptions({
-  model,     onModelChange
+  model, onModelChange, models
 }) {
-  const [availableModels,    setAvailableModels]    = useState([]);
+  const [fetchedModels, setFetchedModels] = useState(null);
 
   useEffect(() => {
+    if (models) return;
     api.get("/models/wavespeed/options").then((res) => {
       if (res.ok) {
-        setAvailableModels(res.models)
+        setFetchedModels(res.models);
       }
     }).catch(() => {});
-  }, []);
+  }, [models]);
+
+  const availableModels = models || fetchedModels;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 
       {/* Model */}
-      {availableModels.length > 0 && (
+      {availableModels && Object.keys(availableModels).length > 0 && (
         <div>
           <label style={FL}>Model</label>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {availableModels.map((m) => {
-              const active = model === m;
+            {Object.entries(availableModels).map(([key, info]) => {
+              const active = model === key;
               return (
                 <button
-                  key={m}
-                  onClick={() => onModelChange(m)}
+                  key={key}
+                  onClick={() => onModelChange(key)}
                   style={{
                     padding:      "6px 14px",
                     borderRadius: radius.md,
@@ -52,7 +52,7 @@ export function CloudOptions({
                     transition:   "all 0.15s",
                   }}
                 >
-                  {m}
+                  {info.name}
                 </button>
               );
             })}

@@ -29,18 +29,23 @@ const WAVESPEED_QWEN_EDIT_URL = `${WAVESPEED_BASE_URL}/wavespeed-ai/qwen-image-2
 const WAVESPEED_ANY_LLM_URL = `${WAVESPEED_BASE_URL}/wavespeed-ai/any-llm`
 const WAVESPEED_ANY_LLM_VISION_URL = `${WAVESPEED_BASE_URL}/wavespeed-ai/any-llm/vision`
 const WAVESPEED_POLLING = `https://api.wavespeed.ai/api/v3/predictions/`
+const WAVESPEED_UPSCALE_URL = `${WAVESPEED_BASE_URL}/wavespeed-ai/image-upscaler`
 const MODELS = {
     "seedream": {
         name: "Seedream v4.5",
         editLink: WAVESPEED_SEEDREAM_EDIT_SEQUENTIAL_URL,
-        cost: '.04'
+        cost: '.04',
+        min: 512,
+        max: 8192
     },
     "qwen-image-2.0": {
         name: "Qwen Image 2.0",
         link: "https://www.wavespeed.ai/models/qwen-image-2.0",
         editLink: WAVESPEED_QWEN_EDIT_URL,
         cost: '.03',
-        poll: true
+        poll: true,
+        min: 512,
+        max: 2048
     }
 }
 
@@ -346,6 +351,32 @@ function extractLLMText(result) {
 }
 
 /**
+ * Upscale an image using the WaveSpeed image-upscaler endpoint.
+ *
+ * @param {{ imageUrl: string, targetResolution?: string }} options
+ * @returns {Promise<unknown>} Raw WaveSpeed API response body.
+ */
+async function upscaleImage({ imageUrl, targetResolution = "4k" }) {
+    const payload = {
+        image: imageUrl,
+        target_resolution: targetResolution,
+        output_format: "png",
+        enable_sync_mode: true,
+        enable_base64_output: false
+    }
+
+    let response = await axios.post(WAVESPEED_UPSCALE_URL, payload, {
+        headers: getAuthHeaders({
+            "Content-Type": "application/json"
+        }),
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity
+    })
+
+    return response.data
+}
+
+/**
  * Replace the active WaveSpeed API key at runtime.
  *
  * Called at server startup (from server.js) to load the persisted key,
@@ -361,6 +392,7 @@ module.exports = {
     setApiKey,
     uploadBufferToWaveSpeed,
     generateSeedreamEdit,
+    upscaleImage,
     callAnyLLM,
     callAnyLLMVision,
     extractLLMText,

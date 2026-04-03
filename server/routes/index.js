@@ -29,7 +29,7 @@ router.use(require("./assets"));
 router.use(require("./tags"));
 router.use(require("./comfyui"));
 router.use(require("./gallery"));
-router.use(require("./generate"));
+router.use("/image", require("./generate"));
 router.use(require("./compile"));
 router.use(require("./settings"));
 router.use(require("./models"));

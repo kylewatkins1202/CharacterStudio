@@ -9,10 +9,12 @@ import { GalleryPage } from "./components/GalleryPage";
 import { TagsPage } from "./components/TagsPage";
 import { SettingsModal } from "./components/SettingsModal";
 import { AssetsPage } from "./components/AssetsPage";
+import { UpscalePage } from "./components/UpscalePage";
 
 const NAV_TABS = [
   ["generate", "Generate"],
   ["gallery",  null],   // label computed below to include count badge
+  ["upscale",  "Upscale"],
   ["tags",     "Tags"],
   ["assets",   "Assets"],
 ];
@@ -71,6 +73,9 @@ export default function App() {
   const [localScheduler, setLocalScheduler] = useState("sgm_uniform")
   const [localSampler,   setLocalSampler]   = useState("euler")
   // Model 
+
+  // Upscale page images
+  const [upscaleImages, setUpscaleImages] = useState([]);
 
   // Max reference images allowed by the current mode (null = unlimited)
   const maxReferenceImages = useMemo(() => mode === 'local' ? 3 : null, [mode]);
@@ -134,6 +139,15 @@ export default function App() {
     });
     setPage("generate");
   }, [maxReferenceImages, toast]);
+
+  /**
+   * Send a gallery entry to the upscale page and navigate there.
+   * @param {object} entry
+   */
+  const handleUpscale = useCallback((entry) => {
+    setUpscaleImages([{ assetId: entry.imageAssetId, url: entry.localUrl || entry.imageUrl, purpose: "" }]);
+    setPage("upscale");
+  }, []);
 
   /**
    * Increment the gallery badge after a successful generation.
@@ -362,7 +376,12 @@ export default function App() {
           toast={toast}
           onUsePrompt={handleUsePrompt}
           onAddReference={handleAddReference}
+          onUpscale={handleUpscale}
         />
+      )}
+
+      {page === "upscale" && (
+        <UpscalePage toast={toast} images={upscaleImages} onImagesChange={setUpscaleImages} />
       )}
 
       <div style={{ display: page === "tags" ? "block" : "none" }}>

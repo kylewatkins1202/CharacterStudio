@@ -18,13 +18,13 @@ router.get("/models/comfyui/options", (req, res) => {
 });
 
 /**
- * GET /models/comfyui/options
- * Returns available model keys and lora keys for the local ComfyUI backend.
+ * GET /models/wavespeed/options
+ * Returns available wavespeed model keys with name, min, and max.
  */
 router.get("/models/wavespeed/options", (req, res) => {
   res.json({
-    ok:         true,
-    models:     Object.keys(wavespeed.MODELS),
+    ok:     true,
+    models: Object.fromEntries(Object.entries(wavespeed.MODELS).map(([k, v]) => [k, { name: v.name, min: v.min ?? 512, max: v.max }])),
   });
 });
 
