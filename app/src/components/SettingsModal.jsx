@@ -12,7 +12,22 @@ import { colors, font, radius, fieldLabel as FL, fieldInput as FI } from "../the
  *
  * @param {{ onClose: () => void, toast: { add: Function } }} props
  */
-export function SettingsModal({ onClose, toast }) {
+const THEME_OPTIONS = [
+  { key: "dark",     label: "Dark",     desc: "Pure black"  },
+  { key: "slate",    label: "Slate",    desc: "Cool blue"   },
+  { key: "warm",     label: "Warm",     desc: "Amber"       },
+  { key: "light",    label: "Light",    desc: "Light mode"  },
+  { key: "forest",   label: "Forest",   desc: "Deep green"  },
+  { key: "rose",     label: "Rose",     desc: "Dusty mauve" },
+  { key: "midnight", label: "Midnight", desc: "Indigo"      },
+  { key: "sand",     label: "Sand",     desc: "Warm beige"  },
+  { key: "mist",     label: "Mist",     desc: "Cool blue"   },
+  { key: "sage",     label: "Sage",     desc: "Soft green"  },
+  { key: "neon",     label: "Neon",     desc: "Phosphor"    },
+  { key: "dusk",     label: "Dusk",     desc: "Twilight"    },
+];
+
+export function SettingsModal({ onClose, toast, theme, setTheme }) {
   // Current API key value in the input
   const [apiKey,               setApiKey]               = useState("");
   // Toggle to reveal/hide the key
@@ -169,6 +184,41 @@ export function SettingsModal({ onClose, toast }) {
             Settings
           </div>
           <button onClick={onClose} style={ghostBtn}>✕</button>
+        </div>
+
+        {/* ── Theme ─────────────────────────────────────────────────────────── */}
+        <div style={section}>
+          <div style={sectionTitle}>Theme</div>
+          <div style={{ display: "grid", gap: 8, gridTemplateColumns: "1fr 1fr 1fr" }}>
+            {THEME_OPTIONS.map(({ key, label, desc }) => {
+              const active = theme === key;
+              return (
+                <button
+                  key={key}
+                  onClick={() => setTheme(key)}
+                  style={{
+                    flex:         1,
+                    padding:      "10px 0",
+                    borderRadius: radius.md,
+                    border:       `1px solid ${active ? colors.borderFocus : colors.borderMid}`,
+                    background:   active ? colors.borderStrong : "transparent",
+                    color:        active ? colors.textHigh : colors.textMuted,
+                    fontFamily:   font.mono,
+                    fontSize:     font.sizeSm,
+                    cursor:       "pointer",
+                    transition:   "all 0.15s",
+                    display:      "flex",
+                    flexDirection:"column",
+                    alignItems:   "center",
+                    gap:          3,
+                  }}
+                >
+                  <span style={{ fontWeight: active ? 600 : 400 }}>{label}</span>
+                  <span style={{ fontSize: font.sizeXs, color: active ? colors.textMid : colors.textGhost }}>{desc}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* ── API Key ────────────────────────────────────────────────────────── */}

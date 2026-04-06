@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { api } from "./lib/api";
 import { makeSyntheticResult } from "./lib/utils";
 import { ASPECT_RATIOS } from "./lib/constants";
-import { globalCss, colors, font } from "./theme";
+import { globalCss, getThemeCss, colors, font } from "./theme";
 import { useToast, Toast } from "./components/Toast";
 import { GeneratePage } from "./components/GeneratePage";
 import { GalleryPage } from "./components/GalleryPage";
@@ -33,6 +33,9 @@ export default function App() {
   const [page,         setPage]         = useState("generate");
   // Whether the settings modal is open
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Active theme — persisted to localStorage
+  const [theme, setThemeState] = useState(() => localStorage.getItem("cs-theme") || "dark");
+  const setTheme = (name) => { localStorage.setItem("cs-theme", name); setThemeState(name); };
   // All tags fetched from the API
   const [tags,         setTags]         = useState([]);
   // Number of gallery entries — drives the nav badge label
@@ -107,10 +110,8 @@ export default function App() {
    */
   const loadGalleryCount = useCallback(async () => {
     try {
-      // Fetch gallery metadata
-      const res = await api.get("/gallery");
-      // Store the total entry count
-      if (res.ok) setGalleryCount(res.count);
+      const res = await api.get("/gallery?pageSize=1");
+      if (res.ok) setGalleryCount(res.total ?? res.count ?? 0);
     } catch {}
   }, []);
 
@@ -237,16 +238,16 @@ export default function App() {
 
   return (
     <>
-      <style>{globalCss}</style>
+      <style>{getThemeCss(theme) + globalCss}</style>
 
       {/* Top navigation bar — also serves as the drag region for the frameless window */}
       <nav style={{
         position:          "sticky",
         top:               0,
         zIndex:            50,
-        background:        "rgba(8,8,8,0.94)",
+        background:        colors.surface,
         backdropFilter:    "blur(12px)",
-        borderBottom:      `1px solid #111`,
+        borderBottom:      `1px solid ${colors.border}`,
         display:           "flex",
         alignItems:        "center",
         padding:           "0 0 0 28px",
@@ -255,7 +256,7 @@ export default function App() {
         WebkitAppRegion:   "drag",
         userSelect:        "none",
       }}>
-        <div style={{ fontFamily: font.serif, fontSize: font.sizeNav, color: "#e0e0e0", fontWeight: 700, letterSpacing: "-0.02em" }}>
+        <div style={{ fontFamily: font.serif, fontSize: font.sizeNav, color: colors.textMid, fontWeight: 700, letterSpacing: "-0.02em" }}>
           Character Studio
         </div>
         <div style={{ display: "flex", gap: 2, WebkitAppRegion: "no-drag" }}>
@@ -267,8 +268,8 @@ export default function App() {
                 padding:      "5px 14px",
                 borderRadius: 6,
                 border:       "none",
-                background:   page === id ? "#161616" : "transparent",
-                color:        page === id ? "#e0e0e0" : "#3a3a3a",
+                background:   page === id ? colors.borderMid : "transparent",
+                color:        page === id ? colors.textMid : colors.textGhost,
                 fontFamily:   font.mono,
                 fontSize:     font.sizeLg,
                 cursor:       "pointer",
@@ -305,8 +306,8 @@ export default function App() {
         {window.electronAPI && (
           <div style={{ display: "flex", alignItems: "stretch", height: "100%", marginLeft: 8, WebkitAppRegion: "no-drag" }}>
             {[
-              { label: "─", action: "minimize", hover: "#1e1e1e" },
-              { label: "□", action: "maximize", hover: "#1e1e1e" },
+              { label: "─", action: "minimize", hover: colors.borderMid },
+              { label: "□", action: "maximize", hover: colors.borderMid },
               { label: "×", action: "close",    hover: "#c0392b" },
             ].map(({ label, action, hover }) => (
               <button
@@ -335,7 +336,7 @@ export default function App() {
       </nav>
 
       {settingsOpen && (
-        <SettingsModal onClose={() => setSettingsOpen(false)} toast={toast} />
+        <SettingsModal onClose={() => setSettingsOpen(false)} toast={toast} theme={theme} setTheme={setTheme} />
       )}
 
       {/*

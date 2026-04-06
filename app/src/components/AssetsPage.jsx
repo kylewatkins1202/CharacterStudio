@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "../lib/api";
 import { ImageLightbox } from "./ImageLightbox";
+import { Pagination } from "./Pagination";
 import { colors, font } from "../theme";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -38,6 +39,11 @@ function localUrl(asset) {
   return "/api/assets/" + asset.assetPath.split("/").map(encodeURIComponent).join("/");
 }
 
+function thumbUrl(asset) {
+  if (asset.assetPath) return `/api/assets/${asset.id}/thumb`;
+  return asset.url;
+}
+
 function fileToBase64(file) {
   return new Promise((resolve) => {
     const reader = new FileReader();
@@ -48,26 +54,27 @@ function fileToBase64(file) {
 
 // ─── AssetThumb ───────────────────────────────────────────────────────────────
 
-function AssetThumb({ asset, size = 180, onExpand }) {
-  const fallback = localUrl(asset);
+function AssetThumb({ asset, size = 180, onExpand, show }) {
+  const primary  = thumbUrl(asset);
+  const fallback = localUrl(asset) || asset.url;
   return (
     <img
-      src={asset.url}
-      onError={(e) => { if (fallback && e.target.src !== fallback) e.target.src = fallback; }}
+      src={primary}
+      onError={(e) => { if (e.target.src !== fallback) e.target.src = fallback; }}
       alt={asset.filename}
-      onClick={() => !asset.hidden && onExpand?.(asset.url)}
+      onClick={() => !asset.hidden && onExpand?.(localUrl(asset) || asset.url)}
       style={{
         width:        "100%",
         height:       size,
         objectFit:    "cover",
         borderRadius: "6px 6px 0 0",
         display:      "block",
-        opacity:      asset.hidden ? 0.25 : 1,
-        filter:       asset.hidden ? "blur(24px)" : "none",
+        opacity:      !show && asset.hidden ? 0.25 : 1,
+        filter:       !show && asset.hidden ? "blur(24px)" : "none",
         transition:   "opacity 0.2s",
         background:   colors.surface,
         border:       `1px solid ${colors.border}`,
-        cursor:       asset.hidden ? "default" : "zoom-in",
+        cursor:       !show && asset.hidden ? "default" : "zoom-in",
       }}
     />
   );
@@ -75,7 +82,7 @@ function AssetThumb({ asset, size = 180, onExpand }) {
 
 // ─── AssetCard ────────────────────────────────────────────────────────────────
 
-function AssetCard({ asset, onUse, onToggleHidden, onDelete, onExpand }) {
+function AssetCard({ asset, onUse, onToggleHidden, onDelete, onExpand, show }) {
   const iconBtn = {
     padding:        "4px 7px",
     background:     "transparent",
@@ -88,7 +95,6 @@ function AssetCard({ asset, onUse, onToggleHidden, onDelete, onExpand }) {
     justifyContent: "center",
   };
 
-  // Build a human-readable label from whatever context fields exist
   const label = asset.purpose || asset.group || asset.filename?.split("-")[0] || "asset";
 
   return (
@@ -99,10 +105,10 @@ function AssetCard({ asset, onUse, onToggleHidden, onDelete, onExpand }) {
       overflow:      "hidden",
       display:       "flex",
       flexDirection: "column",
-      opacity:       asset.hidden ? 0.5 : 1,
+      opacity:       !show && asset.hidden ? 0.5 : 1,
       transition:    "opacity 0.2s",
     }}>
-      <AssetThumb asset={asset} onExpand={onExpand} />
+      <AssetThumb asset={asset} onExpand={onExpand} show={show} />
 
       <div style={{ padding: "8px 10px", display: "flex", flexDirection: "column", gap: 6 }}>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -187,7 +193,7 @@ function UploadZone({ onFiles, uploading }) {
         fontFamily:   font.mono,
         fontSize:     12,
         transition:   "all 0.2s",
-        background:   dragging ? `${colors.primary}08` : "transparent",
+        background:   dragging ? colors.primaryA08 : "transparent",
         marginBottom: 20,
       }}
     >
@@ -211,19 +217,39 @@ export function AssetsPage({ toast, onAddReference }) {
   const [loading,     setLoading]     = useState(true);
   const [uploading,   setUploading]   = useState(false);
   const [showHidden,  setShowHidden]  = useState(false);
+  const [showAll,     setShowAll]     = useState(false); // show all hidden assets regardless of filter
   const [lightboxSrc, setLightboxSrc] = useState(null);
 
-  const load = useCallback(async () => {
+  // Pagination
+  const [page,       setPage]       = useState(1);
+  const [pageSize]                  = useState(30);
+  const [total,      setTotal]      = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+
+  const load = useCallback(async (p = 1, hidden = showHidden) => {
+    setLoading(true);
     try {
-      const res = await api.get("/assets");
-      if (res.ok) setAssets(res.assets);
+      const hiddenParam = hidden ? "" : "&hidden=false";
+      const res = await api.get(`/assets?page=${p}&pageSize=${pageSize}${hiddenParam}`);
+      if (res.ok) {
+        setAssets(res.assets);
+        setTotal(res.total ?? 0);
+        setTotalPages(res.totalPages ?? 1);
+        setPage(p);
+      }
     } catch {
       toast.add("Failed to load assets", "error");
     }
     setLoading(false);
-  }, [toast]);
+  }, [toast, pageSize, showHidden]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(1); }, [load]);
+
+  const handleToggleShowHidden = () => {
+    const next = !showHidden;
+    setShowHidden(next);
+    load(1, next);
+  };
 
   const handleToggleHidden = async (asset) => {
     try {
@@ -239,8 +265,9 @@ export function AssetsPage({ toast, onAddReference }) {
     try {
       const res = await api.delete(`/assets/${asset.id}`);
       if (!res.ok) { toast.add(res.error || "Delete failed", "error"); return; }
-      setAssets((prev) => prev.filter((a) => a.id !== asset.id));
       toast.add("Asset deleted", "success");
+      const nextPage = assets.length === 1 && page > 1 ? page - 1 : page;
+      load(nextPage);
     } catch {
       toast.add("Network error", "error");
     }
@@ -252,7 +279,7 @@ export function AssetsPage({ toast, onAddReference }) {
       const images = await Promise.all(files.map(fileToBase64));
       const res = await api.post("/assets", { images });
       if (res.ok) {
-        setAssets((prev) => [...res.assets, ...prev]);
+        load(1);
         toast.add(`${res.assets.length} asset${res.assets.length !== 1 ? "s" : ""} uploaded`, "success");
       } else {
         toast.add(res.error || "Upload failed", "error");
@@ -263,9 +290,7 @@ export function AssetsPage({ toast, onAddReference }) {
     setUploading(false);
   };
 
-  const visible = assets.filter((a) => showHidden || !a.hidden);
-
-  if (loading) {
+  if (loading && assets.length === 0) {
     return (
       <div style={{ padding: 40, color: colors.textMuted, fontFamily: font.mono, fontSize: 13 }}>
         Loading assets…
@@ -278,7 +303,8 @@ export function AssetsPage({ toast, onAddReference }) {
       {lightboxSrc && <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />}
 
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24, justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12}}>
         <h2 style={{
           margin:        0,
           fontFamily:    font.mono,
@@ -290,9 +316,30 @@ export function AssetsPage({ toast, onAddReference }) {
         }}>
           Assets
         </h2>
-        <span style={{ fontFamily: font.mono, fontSize: 11, color: colors.textMuted }}>{visible.length}</span>
+        <span style={{ fontFamily: font.mono, fontSize: 11, color: colors.textMuted }}>{total}</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12}}>
+        {
+          showHidden === true && 
+            <button
+              onClick={() => {setShowAll((v) => !v);}}
+              style={{
+                float: "right",
+                padding:      "4px 12px",
+                background:   showAll ? colors.borderMid : "transparent",
+                border:       `1px solid ${colors.border}`,
+                borderRadius: 6,
+                color:        colors.textMuted,
+                fontFamily:   font.mono,
+                fontSize:     11,
+                cursor:       "pointer",
+              }}
+            >
+              {showAll ? "Hide all" : "Show all"}
+            </button>
+        }
         <button
-          onClick={() => setShowHidden((v) => !v)}
+          onClick={handleToggleShowHidden}
           style={{
             marginLeft:   "auto",
             padding:      "4px 12px",
@@ -307,29 +354,41 @@ export function AssetsPage({ toast, onAddReference }) {
         >
           {showHidden ? "Hide hidden" : "Show hidden"}
         </button>
+        </div>
       </div>
 
       <UploadZone onFiles={handleUpload} uploading={uploading} />
 
-      {visible.length === 0 ? (
+      {assets.length === 0 && !loading ? (
         <p style={{ fontFamily: font.mono, fontSize: 12, color: colors.textGhost, margin: 0 }}>
-          {assets.length === 0
+          {total === 0
             ? "No assets yet. Upload images above or generate images to populate this page."
             : "No assets to show."}
         </p>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12 }}>
-          {visible.map((asset) => (
-            <AssetCard
-              key={asset.id}
-              asset={asset}
-              onUse={onAddReference}
-              onToggleHidden={handleToggleHidden}
-              onDelete={handleDelete}
-              onExpand={(src) => setLightboxSrc(src)}
-            />
-          ))}
-        </div>
+        <>
+          {loading && (
+            <div style={{ display: "flex", justifyContent: "center", padding: "40px 0" }}>
+              <div style={{ width: 24, height: 24, border: `2px solid ${colors.borderMid}`, borderTop: `2px solid ${colors.borderStrong}`, borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+            </div>
+          )}
+          {!loading && (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12 }}>
+              {assets.map((asset) => (
+                <AssetCard
+                  key={asset.id}
+                  asset={asset}
+                  onUse={onAddReference}
+                  onToggleHidden={handleToggleHidden}
+                  onDelete={handleDelete}
+                  onExpand={(src) => setLightboxSrc(src)}
+                  show={showAll}
+                />
+              ))}
+            </div>
+          )}
+          <Pagination page={page} totalPages={totalPages} onPage={(p) => load(p)} />
+        </>
       )}
     </div>
   );

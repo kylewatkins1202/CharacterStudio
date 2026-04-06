@@ -148,7 +148,7 @@ export function TagDetail({ tag, onClose, onUpdated, onDeleted, toast }) {
             <button
               onClick={() => setConfirmDelete(true)}
               style={{ padding: "6px 14px", background: "none", border: `1px solid ${colors.borderStrong}`, borderRadius: radius.md - 2, color: colors.textMuted, fontFamily: font.mono, fontSize: font.sizeMd, cursor: "pointer", transition: "all 0.15s" }}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = `${colors.error}66`; e.currentTarget.style.color = colors.error; }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = colors.errorA66; e.currentTarget.style.color = colors.error; }}
               onMouseLeave={(e) => { e.currentTarget.style.borderColor = colors.borderStrong; e.currentTarget.style.color = colors.textMuted; }}
             >
               Delete tag

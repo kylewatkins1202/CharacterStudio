@@ -67,9 +67,29 @@ async function populateEntry(entry) {
 
 router.get("/gallery", async (req, res) => {
   try {
-    const entries   = await db.gallery.getGalleryEntries();
-    const populated = await Promise.all(entries.map(populateEntry));
-    res.json({ ok: true, count: populated.length, entries: populated });
+    const page     = Math.max(1, parseInt(req.query.page)     || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize) || 20));
+    const all      = await db.gallery.getGalleryEntries();
+
+    // Optional hidden filter — mirrors the assets route behaviour.
+    // Requires a single batch asset lookup to resolve hidden state for new-format entries.
+    let filtered = all;
+    if (req.query.hidden !== undefined) {
+      const wantHidden = req.query.hidden === "true";
+      const assetList  = await db.assets.getAssets();
+      const hiddenById = Object.fromEntries(assetList.map((a) => [a.id, Boolean(a.hidden)]));
+      filtered = all.filter((entry) => {
+        const isHidden = entry.imageAssetId
+          ? Boolean(hiddenById[entry.imageAssetId])
+          : Boolean(entry.hidden);
+        return isHidden === wantHidden;
+      });
+    }
+
+    const total     = filtered.length;
+    const slice     = filtered.slice((page - 1) * pageSize, page * pageSize);
+    const populated = await Promise.all(slice.map(populateEntry));
+    res.json({ ok: true, total, page, pageSize, totalPages: Math.ceil(total / pageSize), count: populated.length, entries: populated });
   } catch (error) {
     res.status(500).json({ error: "failed to fetch gallery", details: error.message });
   }

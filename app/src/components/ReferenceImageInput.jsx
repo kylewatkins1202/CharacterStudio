@@ -49,7 +49,7 @@ function UrlReferenceInput({ onAdd }) {
           placeholder="Paste image URL…"
           style={{
             ...FI,
-            borderColor: error ? `${colors.error}44` : "#1e1e1e",
+            borderColor: error ? colors.errorA44 : "#1e1e1e",
             fontSize:    font.sizeMd,
             padding:     "8px 12px",
           }}
@@ -312,7 +312,7 @@ export function ReferenceImageInput({ images, onChange, maxImages }) {
                   justifyContent: "center",
                   transition:     "all 0.15s",
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.borderColor = `${colors.error}44`; e.currentTarget.style.color = colors.error; }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = colors.errorA44; e.currentTarget.style.color = colors.error; }}
                 onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#1e1e1e"; e.currentTarget.style.color = colors.textGhost; }}
               >×</button>
             </div>

@@ -15,19 +15,41 @@ const db      = require("../db");
 const { uploadBufferToWaveSpeed } = require("../api/wavespeed");
 const { parseBase64Image }        = require("../utils/imageCollage");
 const { saveAssetLocally }        = require("../utils/assets");
-const path = require("path");
-const fs = require("fs");
+const path  = require("path");
+const fs    = require("fs");
+const sharp = require("sharp");
 
 const router = express.Router();
 
 router.get("/assets", async (req, res) => {
   try {
+    const page     = Math.max(1, parseInt(req.query.page)     || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize) || 30));
     const filter = {};
     if (req.query.hidden !== undefined) filter.hidden = req.query.hidden === "true";
-    const list = await db.assets.getAssets(filter);
-    res.json({ ok: true, count: list.length, assets: list });
+    const list  = await db.assets.getAssets(filter);
+    const total = list.length;
+    const slice = list.slice((page - 1) * pageSize, page * pageSize);
+    res.json({ ok: true, total, page, pageSize, totalPages: Math.ceil(total / pageSize), count: slice.length, assets: slice });
   } catch (error) {
     res.status(500).json({ error: "failed to fetch assets", details: error.message });
+  }
+});
+
+router.get("/assets/:id/thumb", async (req, res) => {
+  try {
+    const asset = await db.assets.getAsset(req.params.id);
+    if (!asset?.assetPath) return res.status(404).json({ error: "no local file" });
+    const filePath = path.join(db.ASSETS_DIR, asset.assetPath);
+    const buf = await sharp(filePath)
+      .resize(300, 300, { fit: "cover", position: "center" })
+      .jpeg({ quality: 75 })
+      .toBuffer();
+    res.set("Content-Type", "image/jpeg");
+    res.set("Cache-Control", "public, max-age=86400");
+    res.send(buf);
+  } catch (error) {
+    res.status(500).json({ error: "thumbnail failed", details: error.message });
   }
 });
 

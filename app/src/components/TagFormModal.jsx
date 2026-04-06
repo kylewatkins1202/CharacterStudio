@@ -111,7 +111,7 @@ export function TagFormModal({ existingTag, onClose, onSave, toast }) {
                 ? "/api/assets/" + asset.assetPath.split("/").map(encodeURIComponent).join("/")
                 : null;
               return (
-                <div key={asset.id} style={{ position: "relative", aspectRatio: "1", borderRadius: radius.md, overflow: "hidden", border: `1px solid ${colors.primary}44` }}>
+                <div key={asset.id} style={{ position: "relative", aspectRatio: "1", borderRadius: radius.md, overflow: "hidden", border: `1px solid ${colors.primaryA44}` }}>
                   <img
                     src={asset.url}
                     onError={(e) => { if (fallback && e.target.src !== fallback) e.target.src = fallback; }}
