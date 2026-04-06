@@ -13,30 +13,32 @@ import { colors, font, radius } from "../theme";
  *   onDownloaded: (id: string, localUrl: string) => void
  * }} props
  */
-export function DownloadButton({ entry, onDownloaded }) {
+export function DownloadButton({ entry, onDownloaded, onOpened }) {
   // True while the download API call is in-flight
   const [downloading, setDownloading] = useState(false);
-
-  if (entry.localUrl) {
+  if (entry?.localUrl) {
     return (
-      <div style={{
+      <button style={{
         padding:    "4px 10px",
         borderRadius: radius.md - 2,
         border:     `1px solid ${colors.borderMid}`,
-        color:      colors.borderStrong,
+        // color:      colors.borderStrong,
         fontFamily: font.mono,
         fontSize:   font.sizeSm,
         userSelect: "none",
-      }}>
-        ✓ Saved
-      </div>
+        cursor:     "pointer",
+      }} onClick={ () => onOpened?.({localUrl: entry.localUrl, imageAssetId: entry.imageAssetId})}>
+        ✓ Open
+      </button>
     );
   }
-
+  
   const handleDownload = async () => {
     // Set in-flight state
     setDownloading(true);
+
     try {
+      console.log('download')
       // POST to the download endpoint to save the image to the local disk
       const res = await api.post(`/gallery/${entry.id}/download`);
       if (res.ok) {

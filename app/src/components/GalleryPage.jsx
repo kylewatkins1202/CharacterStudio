@@ -265,6 +265,7 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale }) {
                       </button>
                       <DownloadButton
                         entry={entry}
+                        onOpened={({localUrl, imageAssetId}) => window.electronAPI?.openFileLocation({localUrl, imageAssetId})}
                         onDownloaded={(id, localUrl) =>
                           setEntries((p) => p.map((e) => e.id === id ? { ...e, localUrl } : e))
                         }

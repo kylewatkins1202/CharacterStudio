@@ -318,7 +318,7 @@ export default function App() {
                   background:   "none",
                   border:       "none",
                   color:        colors.textMuted,
-                  fontSize:     action === "maximize" ? 12 : 18,
+                  fontSize:     action === "maximize" ? 18 : 18,
                   cursor:       "pointer",
                   fontFamily:   font.mono,
                   transition:   "background 0.15s, color 0.15s",

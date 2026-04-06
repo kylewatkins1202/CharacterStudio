@@ -1,6 +1,7 @@
 const { app, BrowserWindow, shell, ipcMain } = require("electron");
 const path = require("path");
 const { startComfyUI, stopComfyUI } = require("./comfyui");
+const { DATA_DIR } = require("./server/db");
 
 const envPath = process.env.NODE_ENV === "production"
   ? path.join(process.resourcesPath, ".env")
@@ -39,6 +40,14 @@ function createWindow() {
     else mainWindow?.maximize();
   });
   ipcMain.on("win:close", () => mainWindow?.close());
+  ipcMain.on("open-file-location", (_, {localUrl, imageAssetId}) => {
+    console.log("Open file location:", localUrl, imageAssetId);
+    let filePath = path.join(DATA_DIR, localUrl.replace("/api", ""));
+    shell.openPath(filePath)
+    .then((errorMessage) => {
+      if (errorMessage) console.error('Failed to open image:', errorMessage);
+    })
+  });
 
   const url = isDev
     ? "http://localhost:5173"

@@ -19,8 +19,10 @@ const { app } = (() => {
   catch { return { app: null }; }
 })();
 
+const isDev = process.env.NODE_ENV === "development";
+
 // Root data directory — differs between Electron and plain Node environments.
-const DATA_DIR = app
+const DATA_DIR = app && !isDev
   ? path.join(app.getPath("userData"), "data")   // ~/Library/Application Support/.../data
   : path.join(__dirname, "..", "data");           // <projectRoot>/server/data
 
