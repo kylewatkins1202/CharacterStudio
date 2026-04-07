@@ -93,8 +93,8 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale }) {
   const visibleEntries = entries.filter((e) => showHidden ? true : !e.hidden);
 
   return (
-    <div style={{ maxWidth: 1080, margin: "0 auto", padding: "40px 24px" }}>
-      {lightboxSrc && <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />}
+    <div style={{ margin: "0 auto", padding: "40px 8px" }}>
+      {lightboxSrc && <ImageLightbox {...lightboxSrc} upscale={onUpscale}  onClose={() => setLightboxSrc(null)} />}
 
       {/* Page header */}
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 32, position: "fixed", background: colors.surface, zIndex: 100, top: 54, left: 0, right: 0, padding: "24px", borderBottom: `1px solid ${colors.border}` }}>
@@ -165,7 +165,7 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale }) {
         </div>
       ) : (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(350px, 1fr))", gap: 12, marginTop: 90 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr 1fr 1fr", gap: 6, marginTop: 90 }}>
             {visibleEntries.map((entry) => {
               const isRevealed = revealed.has(entry.id);
               const isHidden   = entry.hidden;
@@ -181,7 +181,7 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale }) {
                     <img
                       src={entry.localUrl || entry.imageUrl}
                       alt=""
-                      onClick={() => { if (!isHidden || isRevealed || showAll) setLightboxSrc(entry.localUrl || entry.imageUrl); }}
+                      onClick={() => { if (!isHidden || isRevealed || showAll) setLightboxSrc({ src: entry.localUrl || entry.imageUrl, entry }); }}
                       style={{
                         width:      "100%",
                         display:    "block",
@@ -211,11 +211,11 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale }) {
                   </div>
 
                   {/* Card footer */}
-                  <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ padding: "12px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
                     <p style={{ color: colors.textDim, fontFamily: font.mono, fontSize: font.sizeSm, margin: 0, lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
                       {entry.userPrompt}
                     </p>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexDirection: "column" }}>
                       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                         {entry.size && (
                           <span style={{ color: colors.borderStrong, fontFamily: font.mono, fontSize: font.sizeXs }}>{entry.size.replace("*", " × ")}</span>
@@ -227,7 +227,7 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale }) {
                           {new Date(entry.timestamp).toLocaleDateString()}
                         </span>
                       </div>
-                      <div style={{ display: "flex", gap: 6 }}>
+                      <div style={{ display: "flex", gap: 2, justifyContent: "flex-start", flexWrap: "wrap" }}>
                         <button
                           onClick={() => onUsePrompt(entry)}
                           style={{ padding: "4px 10px", background: "none", border: `1px solid ${colors.borderStrong}`, borderRadius: radius.md - 2, color: colors.textMuted, fontFamily: font.mono, fontSize: font.sizeSm, cursor: "pointer", transition: "all 0.15s", whiteSpace: "nowrap" }}
@@ -235,14 +235,6 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale }) {
                           onMouseLeave={(e) => { e.currentTarget.style.borderColor = colors.borderStrong; e.currentTarget.style.color = colors.textMuted; }}
                         >
                           ↑ Use
-                        </button>
-                        <button
-                          onClick={() => onUpscale(entry)}
-                          style={{ padding: "4px 10px", background: "none", border: `1px solid ${colors.borderMid}`, borderRadius: radius.md - 2, color: colors.textMuted, fontFamily: font.mono, fontSize: font.sizeSm, cursor: "pointer", transition: "all 0.15s", whiteSpace: "nowrap" }}
-                          onMouseEnter={(e) => { e.currentTarget.style.borderColor = colors.borderFocus; e.currentTarget.style.color = colors.textHigh; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.borderColor = colors.borderMid; e.currentTarget.style.color = colors.textMuted; }}
-                        >
-                          Upscale
                         </button>
                         <button
                           onClick={() => { onAddReference({ id: entry.imageAssetId, url: entry.imageUrl, purpose: "composition" }); toast.add("Added as reference", "success"); }}
