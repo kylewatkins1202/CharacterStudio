@@ -24,7 +24,7 @@ function createWindow() {
     height: 900,
     minWidth: 900,
     minHeight: 600,
-    icon: path.join(__dirname, "favicon.svg"),
+    icon: path.join(__dirname, "build", "icon2.png"),
     frame: false,
     backgroundColor: "#080808",
     webPreferences: {

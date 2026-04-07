@@ -32,7 +32,8 @@
       "comfyui.js",
       "server/**/*",
       "app/dist/**/*",
-      "!server/data/*",
+      "!server/data",
+      "!server/data/**",
       "node_modules/**/*",
       "!node_modules/.cache"
     ],
@@ -40,28 +41,24 @@
       {
         "from": ".env",
         "to": ".env"
-      },
-      {
-        "from": "server/data",
-        "to": "data",
-        "filter": [
-          "**/*"
-        ]
       }
     ],
     "mac": {
       "category": "public.app-category.graphics-design",
+      "icon": "build/icon2.icns",
       "target": [
         "dmg",
         "zip"
       ]
     },
     "win": {
+      "icon": "build/icon2.ico",
       "target": [
         "nsis"
       ]
     },
     "linux": {
+      "icon": "build/icon2.png",
       "target": [
         "AppImage"
       ]

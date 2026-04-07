@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(taskkill /F /IM \"Ares.exe\" /T)",
+      "Bash(taskkill /F /IM \"electron.exe\" /T)",
+      "Bash(npm run:*)"
+    ]
+  }
+}

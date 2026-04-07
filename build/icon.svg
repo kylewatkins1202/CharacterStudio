@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Background -->
+  <rect width="1024" height="1024" rx="200" fill="#0a0a0a"/>
+
+  <!-- Subtle inner glow ring -->
+  <rect x="24" y="24" width="976" height="976" rx="184"
+        fill="none" stroke="#ffffff" stroke-width="2" opacity="0.06"/>
+
+  <!-- Portrait frame — thin rectangle with rounded corners -->
+  <rect x="212" y="164" width="600" height="600" rx="32"
+        fill="none" stroke="#f0f0f0" stroke-width="28" opacity="0.12"/>
+
+  <!-- Head -->
+  <circle cx="512" cy="396" r="138" fill="#f0f0f0"/>
+
+  <!-- Shoulders / body arc — clipped to stay inside the frame -->
+  <clipPath id="frame">
+    <rect x="212" y="164" width="600" height="600" rx="32"/>
+  </clipPath>
+  <path d="M 180 820 Q 180 592 512 592 Q 844 592 844 820 L 844 870 L 180 870 Z"
+        fill="#f0f0f0" clip-path="url(#frame)"/>
+
+  <!-- Sparkle — 4-point star, top-right area -->
+  <g transform="translate(756, 236)">
+    <!-- long arms -->
+    <line x1="0" y1="-52" x2="0"  y2="52"  stroke="#f0f0f0" stroke-width="10" stroke-linecap="round"/>
+    <line x1="-52" y1="0" x2="52" y2="0"   stroke="#f0f0f0" stroke-width="10" stroke-linecap="round"/>
+    <!-- short diagonal arms -->
+    <line x1="-22" y1="-22" x2="22" y2="22" stroke="#f0f0f0" stroke-width="6" stroke-linecap="round" opacity="0.6"/>
+    <line x1="22" y1="-22"  x2="-22" y2="22" stroke="#f0f0f0" stroke-width="6" stroke-linecap="round" opacity="0.6"/>
+    <!-- center dot -->
+    <circle cx="0" cy="0" r="7" fill="#f0f0f0"/>
+  </g>
+
+  <!-- Small secondary sparkle — lower left, more subtle -->
+  <g transform="translate(278, 680)" opacity="0.4">
+    <line x1="0" y1="-28" x2="0"  y2="28"  stroke="#f0f0f0" stroke-width="6" stroke-linecap="round"/>
+    <line x1="-28" y1="0" x2="28" y2="0"   stroke="#f0f0f0" stroke-width="6" stroke-linecap="round"/>
+    <circle cx="0" cy="0" r="4" fill="#f0f0f0"/>
+  </g>
+</svg>
