@@ -4,6 +4,12 @@
  * Generate route:
  *   POST /generate
  *
+ * Fire-and-forget pattern:
+ *   1. Parse inputs, compile tags, resolve reference images (synchronous — fast)
+ *   2. Create a loading gallery entry and respond immediately
+ *   3. Run the actual generation (WaveSpeed / ComfyUI) in a background IIFE
+ *   4. On completion emit an SSE gallery:update event so the frontend updates live
+ *
  * Reference images come in three forms:
  *   referenceAssetIds   — existing asset IDs (picked from asset library)
  *   referenceImages     — base64 uploads (new photos, creates asset records)
@@ -19,6 +25,9 @@ const comfyui = require("../api/comfyui")
 const { parseBase64Image } = require("../utils/imageCollage");
 const { extractTags, compilePrompt } = require("../utils/tagCompiler");
 const { healTagAssets, healReferenceItems, healAsset, saveAssetLocally } = require("../utils/assets");
+const emitter = require("../utils/sseEmitter");
+const { activeJobs } = require("./events");
+const { populateEntry } = require("./gallery");
 
 const router = express.Router();
 
@@ -30,7 +39,7 @@ const VISION_MODEL = process.env.VISION_MODEL || "google/gemini-2.5-flash";
 const COST_PER_MEGAPIXEL = 0.06;
 
 function estimateCost(model, {usedLLM = false, useVision = false} = {}) {
-  const modelCost = wavespeed.MODELS[model].cost 
+  const modelCost = wavespeed.MODELS[model].cost
   const llmCost = usedLLM ? wavespeed.LLM_MODELS[LLM_MODEL].cost : 0;
   const visionCost = useVision ? wavespeed.LLM_MODELS[VISION_MODEL].cost : 0;
 
@@ -124,7 +133,7 @@ router.post("/generate", async (req, res) => {
             parserOptions: { model: LLM_MODEL },
             visionOptions: { enable: useVision, force: false, model: VISION_MODEL }
           });
-          compile = true
+          didCompile = true
           await db.cache.setCached(cacheKey, compiled);
         }
       }
@@ -188,7 +197,7 @@ router.post("/generate", async (req, res) => {
 
     // ── Prompt assembly ────────────────────────────────────────────────────
     let finalPrompt = compiled?.rawPrompt ?? prompt;
- 
+
     if (mode === 'wavespeed' && allReferenceItems.length > 0) {
       const characterCount = (compiled?.parsedPlan?.characters ?? tagList.filter((t) => t.type === "character")).length;
       const isPlural  = characterCount > 1;
@@ -199,104 +208,141 @@ router.post("/generate", async (req, res) => {
         const n        = baseIndex + i + 1;
         const entry    = PURPOSE_DIRECTIVES[purpose] || PURPOSE_DIRECTIVES.composition;
         const template = isPlural ? entry.plural : entry.singular;
-        return template.  replace("{n}", n);
+        return template.replace("{n}", n);
       }).join("\n");
 
       finalPrompt = `${finalPrompt}\n\n${refDirectives}`;
     }
 
     // If not compiled
-    if (!compiled)  compiled = { images: [], rawPrompt: prompt };
+    if (!compiled) compiled = { images: [], rawPrompt: prompt };
 
     // Add images to compiled photo
     compiled.images.push(...uploadedReferenceUrls);
     compiled.rawPrompt = finalPrompt;
 
-    let result, imageUrl;
-    // ── Generation ─────────────────────────────────────────────────────────
-    if (mode === "wavespeed") {
-      result = await wavespeed.generateSeedreamEdit({
-        model:              model,
-        images:             compiled.images,
-        prompt:             compiled.rawPrompt,
-        size,
-        enableSyncMode,
-        enableBase64Output
-      });
+    // ── Create loading gallery entry & respond ─────────────────────────────
+    const entryId = crypto.randomUUID();
+    const loadingEntry = {
+      id:               entryId,
+      loading:          true,
+      userPrompt:       prompt,
+      compiledPrompt:   compiled.rawPrompt || null,
+      compiledImages:   compiled.images    || [],
+      referenceAssetIds,
+      size:             size || null,
+      mode,
+      model,
+      negPrompt,
+      timestamp:        new Date().toISOString(),
+    };
 
-      imageUrl = extractImageUrlFromResult(result);
-    } else {
-      let [width, height] = size.split('*')
-      result = await comfyui.generateComfyImage({
-        images:    compiled.images,
-        prompt:    compiled.rawPrompt,
-        negPrompt,
-        size,
-        model:    model   || "DarkBeast",
-        loras:    loras   || [],
-        steps:    steps   != null ? steps   : 4,
-        cfg:       cfg       != null ? cfg       : 1.5,
-        denoise:   denoise   != null ? denoise   : 0.9,
-        scheduler: scheduler || "sgm_uniform",
-        sampler:   sampler   || "euler",
-      })
+    await db.gallery.saveGalleryEntry(loadingEntry);
+    activeJobs.set(entryId, loadingEntry);
+    emitter.emit("gallery:new", loadingEntry);
 
-      imageUrl = extractImageUrlFromResult(result)
-    }
-    // ── Persist generated image as an asset ────────────────────────────────
-    // The generated image is a new photo entering the system — save locally and register.
-    
-    let imageAssetId = null;
+    // Respond immediately — the generate button re-enables now
+    res.json({ ok: true, entryId, loading: true });
 
-    if (imageUrl) {
+    // ── Background generation ──────────────────────────────────────────────
+    // Everything below runs after the response has been sent.
+    (async () => {
       try {
-        const imgRes = await fetch(imageUrl);
-        if (imgRes.ok) {
-          const buffer      = Buffer.from(await imgRes.arrayBuffer());
-          const contentType = imgRes.headers.get("content-type") || "image/jpeg";
-          const ext         = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
-          const filename    = `generated-${Date.now()}.${ext}`;
-          const { localPath, assetPath } = await saveAssetLocally("generated", "result", filename, buffer);
-          const imageAsset = await db.assets.createAsset({
-            id:        crypto.randomUUID(),
-            url:       imageUrl,
-            localPath,
-            assetPath,
-            filename,
-            mimeType:  contentType,
-            hidden:    false,
-            timestamp: new Date().toISOString(),
+        let result, imageUrl;
+
+        if (mode === "wavespeed") {
+          result = await wavespeed.generateSeedreamEdit({
+            model,
+            images:             compiled.images,
+            prompt:             compiled.rawPrompt,
+            size,
+            enableSyncMode: false,
+            enableBase64Output
           });
-          imageAssetId = imageAsset.id;
+
+          if (result.data?.status === "failed") {
+            throw new Error(`WaveSpeed generation failed: ${result.data?.error || "unknown error"}`);
+          }
+          imageUrl = extractImageUrlFromResult(result);
+        } else {
+          result = await comfyui.generateComfyImage({
+            images:    compiled.images,
+            prompt:    compiled.rawPrompt,
+            negPrompt,
+            size,
+            model:     model     || "DarkBeast",
+            loras:     loras     || [],
+            steps:     steps     != null ? steps     : 4,
+            cfg:       cfg       != null ? cfg       : 1.5,
+            denoise:   denoise   != null ? denoise   : 0.9,
+            scheduler: scheduler || "sgm_uniform",
+            sampler:   sampler   || "euler",
+          });
+          imageUrl = extractImageUrlFromResult(result);
         }
-      } catch (err) {
-        console.warn(`[generate] failed to save generated image locally: ${err.message}`);
+
+        // ── Persist generated image as an asset ──────────────────────────
+        let imageAssetId = null;
+
+        if (imageUrl) {
+          try {
+            const imgRes = await fetch(imageUrl);
+            if (imgRes.ok) {
+              const buffer      = Buffer.from(await imgRes.arrayBuffer());
+              const contentType = imgRes.headers.get("content-type") || "image/jpeg";
+              const ext         = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
+              const filename    = `generated-${Date.now()}.${ext}`;
+              const { localPath, assetPath } = await saveAssetLocally("generated", "result", filename, buffer);
+              const imageAsset = await db.assets.createAsset({
+                id:        crypto.randomUUID(),
+                url:       imageUrl,
+                localPath,
+                assetPath,
+                filename,
+                mimeType:  contentType,
+                hidden:    false,
+                timestamp: new Date().toISOString(),
+              });
+              imageAssetId = imageAsset.id;
+            }
+          } catch (err) {
+            console.warn(`[generate] failed to save generated image locally: ${err.message}`);
+          }
+        }
+
+        // ── Update gallery entry with final data ─────────────────────────
+        const cost = mode === 'local' ? 0 : estimateCost(model, { usedLLM: didCompile, useVision });
+        const patch = {
+          loading:        false,
+          imageAssetId,
+          cost,
+          cfg,
+          steps,
+          denoise,
+          loras,
+          scheduler,
+          sampler,
+          compiledPrompt: compiled.rawPrompt || null,
+          compiledImages: compiled.images    || [],
+        };
+
+        const updated = await db.gallery.updateGalleryEntry(entryId, patch);
+        activeJobs.delete(entryId);
+
+        if (updated) {
+          const populated = await populateEntry(updated);
+          emitter.emit("gallery:update", populated);
+        }
+
+      } catch (bgErr) {
+        console.error("[generate bg]", bgErr.message);
+        const errPatch = { loading: false, error: bgErr.message };
+        const updated  = await db.gallery.updateGalleryEntry(entryId, errPatch);
+        activeJobs.delete(entryId);
+        if (updated) emitter.emit("gallery:update", updated);
       }
-    }
+    })();
 
-    // ── Persist to gallery ─────────────────────────────────────────────────
-    if (imageUrl) {
-      await db.gallery.saveGalleryEntry({
-        id:               crypto.randomUUID(),
-        imageAssetId,
-        referenceAssetIds,
-        userPrompt:       prompt,
-        mode:             mode,
-        model:            model,
-        cfg:              cfg,
-        steps:            steps,
-        denoise:          denoise,
-        loras:            loras,
-        negPrompt:        negPrompt,
-        compiledPrompt:   compiled?.rawPrompt || null,
-        compiledImages:   compiled?.images || [],
-        size:             size || null,
-        cost:             mode === 'local' ? 0 : estimateCost(model, {usedLLM: didCompile, useVision: useVision}),
-        timestamp:        new Date().toISOString(),
-      });
-    }
-
-    res.json({ ok: true, compiled, wavespeed: result });
   } catch (error) {
     res.status(500).json({
       error: "generation failed",
@@ -347,7 +393,7 @@ router.post("/upscale", async (req, res) => {
     // Save locally
     let localUrl = null;
     let imageAssetId = null;
-    
+
     try {
       // Attempt to download the upscaled image and save it locally as an asset for future healing if the Wavespeed URL expires. This is a best-effort attempt; if it fails we still return the upscaled URL.
       const imgRes = await fetch(upscaledUrl);

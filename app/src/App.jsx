@@ -51,8 +51,6 @@ export default function App() {
   const [aspect,          setAspect]          = useState(ASPECT_RATIOS[0]);
   // Slider value — longer dimension of the output image in pixels
   const [baseSize,        setBaseSize]        = useState(2048);
-  // True while the generate API call is in-flight
-  const [loading,         setLoading]         = useState(false);
   // Raw WaveSpeed result from the last generation
   const [result,          setResult]          = useState(null);
   // Compiled prompt object { rawPrompt, images } from the last generation
@@ -123,6 +121,45 @@ export default function App() {
     loadGalleryCount();
     api.get("/config").then((res) => { if (res.localGenerationEnabled) setLocalGenerationEnabled(true); }).catch(() => {});
   }, [loadTags, loadGalleryCount]);
+
+  // ── SSE — live gallery updates ────────────────────────────────────────────────
+
+  // null  = no SSE snapshot yet (GalleryPage will fetch on mount as usual)
+  // array = live entries maintained by SSE; GalleryPage reads from here
+  const [sseEntries, setSseEntries] = useState(null);
+
+  useEffect(() => {
+    const es = new EventSource("/api/events");
+
+    // A new loading entry was created — prepend it to the live list
+    es.addEventListener("gallery:new", (e) => {
+      const entry = JSON.parse(e.data);
+      setSseEntries((prev) => (prev ? [entry, ...prev] : [entry]));
+      setGalleryCount((p) => p + 1);
+    });
+
+    // A generation completed or failed — update the matching entry in-place
+    es.addEventListener("gallery:update", (e) => {
+      const updated = JSON.parse(e.data);
+      setSseEntries((prev) => {
+        if (!prev) return null; // gallery not yet loaded; let GalleryPage fetch fresh
+        return prev.map((en) => (en.id === updated.id ? updated : en));
+      });
+      // Show the completed image on the generate page
+      if (!updated.loading && !updated.error) {
+        setResult(makeSyntheticResult(updated.imageUrl || updated.localUrl));
+        setCompiled(
+          updated.compiledPrompt || updated.compiledImages?.length
+            ? { rawPrompt: updated.compiledPrompt || "", images: updated.compiledImages || [] }
+            : null
+        );
+      }
+    });
+
+    es.onerror = () => console.warn("[SSE] connection error — browser will retry");
+
+    return () => es.close();
+  }, []);
 
   // ── Cross-page callbacks ──────────────────────────────────────────────────────
 
@@ -353,7 +390,6 @@ export default function App() {
           mode={mode}             setMode={setMode}
           aspect={aspect}         setAspect={setAspect}
           baseSize={baseSize}     setBaseSize={setBaseSize}
-          loading={loading}       setLoading={setLoading}
           result={result}         setResult={setResult}
           compiled={compiled}     setCompiled={setCompiled}
           referenceImages={referenceImages}
@@ -378,6 +414,8 @@ export default function App() {
           onUsePrompt={handleUsePrompt}
           onAddReference={handleAddReference}
           onUpscale={handleUpscale}
+          sseEntries={sseEntries}
+          onEntriesLoaded={setSseEntries}
         />
       )}
 

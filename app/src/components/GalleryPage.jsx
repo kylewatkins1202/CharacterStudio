@@ -7,13 +7,14 @@ import { colors, font, radius } from "../theme";
 
 // ─── GalleryPage ──────────────────────────────────────────────────────────────
 
-export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale }) {
-  const [entries,    setEntries]    = useState([]);
-  const [loading,    setLoading]    = useState(true);
-  const [showHidden, setShowHidden] = useState(false);
-  const [showAll,    setShowAll]    = useState(false);
-  const [revealed,   setRevealed]   = useState(new Set());
-  const [lightboxSrc, setLightboxSrc] = useState(null);
+export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale, sseEntries, onEntriesLoaded }) {
+  // Local entry list — used when sseEntries (from App) is not yet populated
+  const [localEntries, setLocalEntries] = useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [showHidden,   setShowHidden]   = useState(false);
+  const [showAll,      setShowAll]      = useState(false);
+  const [revealed,     setRevealed]     = useState(new Set());
+  const [lightboxSrc,  setLightboxSrc]  = useState(null);
 
   // Pagination
   const [page,       setPage]       = useState(1);
@@ -21,13 +22,26 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale }) {
   const [total,      setTotal]      = useState(0);
   const [totalPages, setTotalPages] = useState(1);
 
+  // Use the SSE-maintained list if available, fall back to local fetch results
+  const entries    = sseEntries ?? localEntries;
+  const setEntries = useCallback((updater) => {
+    if (sseEntries !== null) {
+      // Propagate the update through App so SSE keeps the list coherent
+      onEntriesLoaded(typeof updater === "function" ? updater(sseEntries) : updater);
+    } else {
+      setLocalEntries(updater);
+    }
+  }, [sseEntries, onEntriesLoaded]);
+
   const load = useCallback(async (p = 1, hidden = showHidden) => {
     setLoading(true);
     try {
       const hiddenParam = hidden ? "" : "&hidden=false";
       const res = await api.get(`/gallery?page=${p}&pageSize=${pageSize}${hiddenParam}`);
       if (res.ok) {
-        setEntries(res.entries);
+        setLocalEntries(res.entries);
+        // Give App the fetched snapshot so SSE events can be merged into it
+        onEntriesLoaded(res.entries);
         setTotal(res.total ?? 0);
         setTotalPages(res.totalPages ?? 1);
         setPage(p);
@@ -36,18 +50,27 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale }) {
       toast.add("Failed to load gallery", "error");
     }
     setLoading(false);
-  }, [toast, pageSize, showHidden]);
+  }, [toast, pageSize, showHidden, onEntriesLoaded]);
 
-  useEffect(() => { load(1); }, [load]);
+  useEffect(() => {
+    // Skip initial fetch if there are active loading jobs — the SSE list already
+    // has them and a fresh fetch would overwrite/lose those pending cards.
+    const hasActiveJobs = sseEntries?.some((e) => e.loading);
+    if (!hasActiveJobs) load(1);
+    else setLoading(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleDelete = async (id) => {
     try {
       const res = await api.delete(`/gallery/${id}`);
       if (res.ok) {
         toast.add("Deleted", "success");
-        // Reload current page; if it's now empty and not page 1, go back
-        const nextPage = entries.length === 1 && page > 1 ? page - 1 : page;
-        load(nextPage);
+        setEntries((prev) => prev.filter((e) => e.id !== id));
+        // Reload if page is now empty and not first page
+        const remaining = entries.filter((e) => e.id !== id);
+        const nextPage = remaining.length === 0 && page > 1 ? page - 1 : page;
+        if (remaining.length === 0) load(nextPage);
       } else {
         toast.add(res.error || "Delete failed", "error");
       }
@@ -64,7 +87,7 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale }) {
         : `/gallery/${entry.id}`;
       const res = await api.patch(endpoint, { hidden: next });
       if (res.ok) {
-        setEntries((p) => p.map((e) => e.id === entry.id ? { ...e, hidden: next } : e));
+        setEntries((prev) => prev.map((e) => e.id === entry.id ? { ...e, hidden: next } : e));
         if (next) setRevealed((p) => { const s = new Set(p); s.delete(entry.id); return s; });
         toast.add(next ? "Image hidden" : "Image visible", "success");
       }
@@ -88,13 +111,13 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale }) {
     load(1, next);
   };
 
-  const totalCost   = entries.reduce((sum, e) => sum + parseFloat(e.cost || 0), 0);
-  const hiddenCount = entries.filter((e) => e.hidden).length;
+  const totalCost      = entries.reduce((sum, e) => sum + parseFloat(e.cost || 0), 0);
+  const hiddenCount    = entries.filter((e) => e.hidden).length;
   const visibleEntries = entries.filter((e) => showHidden ? true : !e.hidden);
-
+  console.log(visibleEntries)
   return (
     <div style={{ margin: "0 auto", padding: "40px 8px" }}>
-      {lightboxSrc && <ImageLightbox {...lightboxSrc} upscale={onUpscale}  onClose={() => setLightboxSrc(null)} />}
+      {lightboxSrc && <ImageLightbox {...lightboxSrc} upscale={onUpscale} onClose={() => setLightboxSrc(null)} />}
 
       {/* Page header */}
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 32, position: "fixed", background: colors.surface, zIndex: 100, top: 54, left: 0, right: 0, padding: "24px", borderBottom: `1px solid ${colors.border}` }}>
@@ -112,39 +135,17 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale }) {
           {showHidden && (
             <button
               onClick={() => setShowAll((p) => !p)}
-              style={{
-                padding:      "6px 14px",
-                borderRadius: radius.md - 1,
-                cursor:       "pointer",
-                border:       `1px solid ${colors.textMuted}`,
-                background:   colors.borderMid,
-                color:        colors.textMid,
-                fontFamily:   font.mono,
-                fontSize:     font.sizeMd,
-                transition:   "all 0.15s",
-              }}
+              style={{ padding: "6px 14px", borderRadius: radius.md - 1, cursor: "pointer", border: `1px solid ${colors.textMuted}`, background: colors.borderMid, color: colors.textMid, fontFamily: font.mono, fontSize: font.sizeMd, transition: "all 0.15s" }}
             >
               {showAll ? "Hide all hidden" : "Show all hidden"}
             </button>
           )}
-          {(
-            <button
-              onClick={handleToggleShowHidden}
-              style={{
-                padding:      "6px 14px",
-                borderRadius: radius.md - 1,
-                cursor:       "pointer",
-                border:       `1px solid ${showHidden ? colors.textMuted : colors.borderStrong}`,
-                background:   showHidden ? colors.borderMid : "transparent",
-                color:        showHidden ? colors.textMid : colors.textMuted,
-                fontFamily:   font.mono,
-                fontSize:     font.sizeMd,
-                transition:   "all 0.15s",
-              }}
-            >
-              {showHidden ? "Hide hidden" : `Show hidden`}
-            </button>
-          )}
+          <button
+            onClick={handleToggleShowHidden}
+            style={{ padding: "6px 14px", borderRadius: radius.md - 1, cursor: "pointer", border: `1px solid ${showHidden ? colors.textMuted : colors.borderStrong}`, background: showHidden ? colors.borderMid : "transparent", color: showHidden ? colors.textMid : colors.textMuted, fontFamily: font.mono, fontSize: font.sizeMd, transition: "all 0.15s" }}
+          >
+            {showHidden ? "Hide hidden" : "Show hidden"}
+          </button>
           {total > 0 && (
             <div style={{ textAlign: "right" }}>
               <div style={{ color: colors.borderStrong, fontFamily: font.mono, fontSize: font.sizeSm, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 2 }}>Total cost</div>
@@ -167,44 +168,64 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale }) {
         <>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr 1fr 1fr", gap: 6, marginTop: 90 }}>
             {visibleEntries.map((entry) => {
+              // ── Loading card ───────────────────────────────────────────
+              if (entry.loading) {
+                return (
+                  <div key={entry.id} style={{ background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: radius.xl, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+                    {/* Shimmer placeholder */}
+                    <div style={{ width: "100%", paddingTop: "100%", position: "relative", background: `linear-gradient(90deg, ${colors.border} 25%, ${colors.borderMid} 50%, ${colors.border} 75%)`, backgroundSize: "200% 100%", animation: "shimmer 1.4s infinite" }}>
+                      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <div style={{ width: 28, height: 28, border: `2px solid ${colors.borderStrong}`, borderTop: `2px solid ${colors.borderFocus}`, borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+                      </div>
+                    </div>
+                    <div style={{ padding: "10px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
+                      <p style={{ color: colors.textDim, fontFamily: font.mono, fontSize: font.sizeSm, margin: 0, lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                        {entry.userPrompt}
+                      </p>
+                      <span style={{ color: colors.textGhost, fontFamily: font.mono, fontSize: font.sizeXs }}>Generating…</span>
+                    </div>
+                  </div>
+                );
+              }
+
+              // ── Error card ─────────────────────────────────────────────
+              if (entry.error) {
+                return (
+                  <div key={entry.id} style={{ background: colors.surface, border: `1px solid ${colors.errorA44}`, borderRadius: radius.xl, overflow: "hidden", padding: "14px" }}>
+                    <p style={{ color: colors.error, fontFamily: font.mono, fontSize: font.sizeSm, margin: "0 0 6px" }}>Generation failed</p>
+                    <p style={{ color: colors.textGhost, fontFamily: font.mono, fontSize: font.sizeXs, margin: "0 0 10px", lineHeight: 1.5 }}>{entry.error}</p>
+                    <button
+                      onClick={() => handleDelete(entry.id)}
+                      style={{ padding: "4px 10px", background: "none", border: `1px solid ${colors.errorA44}`, borderRadius: radius.md - 2, color: colors.error, fontFamily: font.mono, fontSize: font.sizeSm, cursor: "pointer" }}
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                );
+              }
+
+              // ── Normal card ────────────────────────────────────────────
               const isRevealed = revealed.has(entry.id);
               const isHidden   = entry.hidden;
 
               return (
-                <div key={entry.id} style={{
-                  background:   colors.surface,
-                  border:       `1px solid ${isHidden ? colors.borderMid : colors.border}`,
-                  borderRadius: radius.xl,
-                  overflow:     "hidden",
-                }}>
+                <div key={entry.id} style={{ background: colors.surface, border: `1px solid ${isHidden ? colors.borderMid : colors.border}`, borderRadius: radius.xl, overflow: "hidden" }}>
                   <div style={{ position: "relative" }}>
                     <img
                       src={entry.localUrl || entry.imageUrl}
                       alt=""
                       onClick={() => { if (!isHidden || isRevealed || showAll) setLightboxSrc({ src: entry.localUrl || entry.imageUrl, entry }); }}
-                      style={{
-                        width:      "100%",
-                        display:    "block",
-                        filter:     (!isHidden || isRevealed || showAll) ? "none" : "blur(24px)",
-                        transition: "filter 0.3s",
-                        cursor:     (!isHidden || isRevealed || showAll) ? "zoom-in" : "default",
-                      }}
+                      style={{ width: "100%", display: "block", filter: (!isHidden || isRevealed || showAll) ? "none" : "blur(24px)", transition: "filter 0.3s", cursor: (!isHidden || isRevealed || showAll) ? "zoom-in" : "default" }}
                     />
                     {isHidden && !isRevealed && !showAll && (
-                      <div
-                        onClick={() => toggleReveal(entry.id)}
-                        style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", gap: 6 }}
-                      >
+                      <div onClick={() => toggleReveal(entry.id)} style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", gap: 6 }}>
                         <div style={{ color: colors.textMuted, fontFamily: font.mono, fontSize: font.sizeSm, background: "rgba(0,0,0,0.6)", padding: "6px 12px", borderRadius: radius.md - 2 }}>
                           Hidden — click to reveal
                         </div>
                       </div>
                     )}
                     {isHidden && isRevealed && (
-                      <div
-                        onClick={() => toggleReveal(entry.id)}
-                        style={{ position: "absolute", top: 8, right: 8, cursor: "pointer", background: "rgba(0,0,0,0.7)", borderRadius: radius.sm, padding: "3px 8px", color: colors.textMuted, fontFamily: font.mono, fontSize: font.sizeXs }}
-                      >
+                      <div onClick={() => toggleReveal(entry.id)} style={{ position: "absolute", top: 8, right: 8, cursor: "pointer", background: "rgba(0,0,0,0.7)", borderRadius: radius.sm, padding: "3px 8px", color: colors.textMuted, fontFamily: font.mono, fontSize: font.sizeXs }}>
                         re-hide
                       </div>
                     )}
@@ -254,9 +275,9 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale }) {
                         </button>
                         <DownloadButton
                           entry={entry}
-                          onOpened={({ localUrl, imageAssetId }) => window.electronAPI?.openFileLocation({ localUrl, imageAssetId })}
+                          onOpened={(localUrl) => window.electronAPI?.openFileLocation(localUrl)}
                           onDownloaded={(id, localUrl) =>
-                            setEntries((p) => p.map((e) => e.id === id ? { ...e, localUrl } : e))
+                            setEntries((prev) => prev.map((e) => e.id === id ? { ...e, localUrl } : e))
                           }
                         />
                         <button

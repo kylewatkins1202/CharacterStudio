@@ -38,7 +38,7 @@ const MODELS = {
         editLink: WAVESPEED_SEEDREAM_EDIT_SEQUENTIAL_URL,
         cost: '.04',
         min: 512,
-        max: 8192
+        max: 8192, poll: true
     },
     "qwen-image-2.0": {
         name: "Qwen Image 2.0",
@@ -137,7 +137,7 @@ async function generateSeedreamEdit({
     images,
     prompt,
     size,
-    enableSyncMode = true,
+    enableSyncMode = false,
     enableBase64Output = false
 }) {
     const payload = {

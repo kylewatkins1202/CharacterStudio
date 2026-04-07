@@ -631,6 +631,7 @@ export const globalCss = `
   html, body { background: var(--cs-bg); color: var(--cs-text); }
   @keyframes spin { to { transform: rotate(360deg); } }
   @keyframes fadeSlideIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
   ::-webkit-scrollbar { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--cs-border-mid); border-radius: 3px; }

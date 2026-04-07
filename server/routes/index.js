@@ -25,6 +25,8 @@ router.get("/config", (req, res) => res.json({
 }));
 
 // Route groups
+const { router: eventsRouter } = require("./events");
+router.use(eventsRouter);
 router.use(require("./assets"));
 router.use(require("./tags"));
 router.use(require("./comfyui"));

@@ -204,3 +204,4 @@ router.post("/gallery/:id/download", async (req, res) => {
 });
 
 module.exports = router;
+module.exports.populateEntry = populateEntry;

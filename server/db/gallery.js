@@ -32,10 +32,10 @@ class GalleryTable extends DbTable {
    * @returns {Promise<GalleryEntry>}
    */
   async saveGalleryEntry(entry) {
-    const data = await this.read();
-    // Unshift so the newest entry appears first
-    data.entries.unshift(entry);
-    await this.write(data);
+    await this.atomicUpdate((data) => {
+      data.entries.unshift(entry);
+      return data;
+    });
     return entry;
   }
 
@@ -51,19 +51,40 @@ class GalleryTable extends DbTable {
   }
 
   /**
+   * Merge patch into an existing gallery entry and persist.
+   *
+   * @param {string} id    - The `id` of the entry to update.
+   * @param {object} patch - Fields to merge into the entry.
+   * @returns {Promise<GalleryEntry|null>} The updated entry, or null if not found.
+   */
+  async updateGalleryEntry(id, patch) {
+    let updated = null;
+    await this.atomicUpdate((data) => {
+      const idx = data.entries.findIndex((e) => e.id === id);
+      if (idx !== -1) {
+        data.entries[idx] = { ...data.entries[idx], ...patch };
+        updated = data.entries[idx];
+      }
+      return data;
+    });
+    return updated;
+  }
+
+  /**
    * Delete a gallery entry by id.
    *
    * @param {string} id - The `id` field of the entry to remove.
    * @returns {Promise<boolean>} True if an entry was removed, false if the id was not found.
    */
   async deleteGalleryEntry(id) {
-    const data = await this.read();
-    const before = data.entries.length;
-    // Filter out the matching entry
-    data.entries = data.entries.filter((e) => e.id !== id);
-    await this.write(data);
-    // Return true only if something was actually removed
-    return data.entries.length < before;
+    let removed = false;
+    await this.atomicUpdate((data) => {
+      const before = data.entries.length;
+      data.entries = data.entries.filter((e) => e.id !== id);
+      removed = data.entries.length < before;
+      return data;
+    });
+    return removed;
   }
 }
 

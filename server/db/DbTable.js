@@ -22,6 +22,10 @@ class DbTable {
     // Default structure seeded when the file does not exist
     this.declaration = declaration;
 
+    // Serializes all read-modify-write operations so concurrent calls never
+    // interleave their reads and writes on the same JSON file.
+    this._queue = Promise.resolve();
+
     // Bind so the method survives being spread into module.exports
     this.ensureDbTable = this.ensureDbTable.bind(this);
   }
@@ -62,6 +66,26 @@ class DbTable {
    */
   async write(data) {
     await fs.writeFile(this.DIRECTORY, JSON.stringify(data, null, 2), "utf8");
+  }
+
+  /**
+   * Atomically read → transform → write the table file.
+   *
+   * All calls are serialized through a per-table promise queue so that
+   * concurrent read-modify-write operations never interleave and lose data.
+   *
+   * @param {(data: object) => object | Promise<object>} fn
+   *   Receives the current parsed JSON, returns (or resolves to) the new JSON.
+   * @returns {Promise<object>} The value returned by fn.
+   */
+  atomicUpdate(fn) {
+    this._queue = this._queue.then(async () => {
+      const data   = JSON.parse(await fs.readFile(this.DIRECTORY, "utf8"));
+      const result = await fn(data);
+      await fs.writeFile(this.DIRECTORY, JSON.stringify(result ?? data, null, 2), "utf8");
+      return result;
+    });
+    return this._queue;
   }
 }
 

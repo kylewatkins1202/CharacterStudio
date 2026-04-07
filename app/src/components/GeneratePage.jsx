@@ -41,7 +41,6 @@ export function GeneratePage({
   prompt, setPrompt,
   aspect, setAspect,
   baseSize, setBaseSize,
-  loading, setLoading,
   result, setResult,
   compiled, setCompiled,
   referenceImages, setReferenceImages,
@@ -60,6 +59,8 @@ export function GeneratePage({
   localGenerationEnabled,
   onGenerated,
 }) {
+  // True only while the server is acknowledging the generate request (brief)
+  const [starting, setStarting] = useState(false);
   const [wsModels, setWsModels] = useState({});
 
   useEffect(() => {
@@ -83,35 +84,28 @@ export function GeneratePage({
    * @returns {Promise<void>}
    */
   const generate = async () => {
-    // If no prompt
     if (!prompt.trim()) return toast.add("Please enter a prompt", "error");
-    
-    // Set loading to true
-    setLoading(true);
 
-    // Set result to null
+    setStarting(true);
     setResult(null);
-    
-    // Set compiled to null
     setCompiled(null);
 
     try {
-      // Request body
       const body = {
         prompt,
         negPrompt: negPrompt ?? '',
         mode,
         size: computedSize,
         ...(mode === 'local' ? {
-          model:   localModel,
-          steps:   localSteps,
-          cfg:     localCfg,
-          denoise:    localDenoise,
-          loras:      localLoras,
-          scheduler:  localScheduler,
-          sampler:    localSampler,
-        } : { 
-          model: cloudModel
+          model:     localModel,
+          steps:     localSteps,
+          cfg:       localCfg,
+          denoise:   localDenoise,
+          loras:     localLoras,
+          scheduler: localScheduler,
+          sampler:   localSampler,
+        } : {
+          model: cloudModel,
         }),
         // Existing assets picked from the library — resolved server-side by ID
         referenceAssetIds:  referenceImages.filter((i) => i.assetId).map((i) => ({ id: i.assetId, purpose: i.purpose })),
@@ -120,35 +114,22 @@ export function GeneratePage({
         // Pasted URLs — healed if a matching asset exists, used as-is otherwise
         referenceImageUrls: referenceImages.filter((i) => i.isUrl).map((i) => ({ url: i.url || i.src, purpose: i.purpose })),
         resetCache,
-      }
+      };
 
-      // Generate image
       const res = await api.post("/image/generate", body);
 
-      // If response is ok 
       if (res.ok) {
-        // Set result
-        setResult(res.wavespeed);
-
-        // Set compiled
-        setCompiled(res.compiled);
-
-        // Add tost for image generated
-        toast.add("Image generated!", "success");
-
-        // Set reset cache to false
+        toast.add("Generation started!", "success");
         setResetCache(false);
-
-        // Run on generated
         onGenerated();
       } else {
-        // Add toast for generation failed
         toast.add(res.error || "Generation failed", "error");
       }
     } catch (err) {
       toast.add(err.message || "Network error", "error");
     }
-    setLoading(false);
+
+    setStarting(false);
   };
 
   return (
@@ -165,17 +146,16 @@ export function GeneratePage({
         <div> 
           <button
             onClick={() => {console.log('set'); setMode('wavespeed')}}
-            disabled={loading}
             style={{
               padding:      "10px 32px",
-              background:   loading || mode !== "wavespeed" ? "#111" : colors.primary,
-              color:        loading || mode !== "wavespeed" ? colors.textGhost : colors.primaryText,
+              background:   mode !== "wavespeed" ? "#111" : colors.primary,
+              color:        mode !== "wavespeed" ? colors.textGhost : colors.primaryText,
               border:       "none",
               borderRadius: (localGenerationEnabled ? `${radius.md}px ${0}px ${0}px ${radius.md}px` : radius.md),
               fontFamily:   font.mono,
               fontSize:     font.sizeLg,
               fontWeight:   600,
-              cursor:       loading ? "not-allowed" : "pointer",
+              cursor:       starting ? "not-allowed" : "pointer",
               transition:   "all 0.2s",
               whiteSpace:   "nowrap",
             }}
@@ -185,17 +165,16 @@ export function GeneratePage({
           {localGenerationEnabled && (
             <button
               onClick={() => setMode('local')}
-              disabled={loading}
               style={{
                 padding:      "10px 32px",
-                background:   loading || mode !== "local" ? "#111" : colors.primary,
-                color:        loading || mode !== "local" ? colors.textGhost : colors.primaryText,
+                background:   mode !== "local" ? "#111" : colors.primary,
+                color:        mode !== "local" ? colors.textGhost : colors.primaryText,
                 border:       "none",
                 borderRadius: `${0}px ${radius.md}px ${radius.md}px ${0}px`,
                 fontFamily:   font.mono,
                 fontSize:     font.sizeLg,
                 fontWeight:   600,
-                cursor:       loading ? "not-allowed" : "pointer",
+                cursor:       starting ? "not-allowed" : "pointer",
                 transition:   "all 0.2s",
                 whiteSpace:   "nowrap",
               }}
@@ -332,33 +311,25 @@ export function GeneratePage({
           </label>
           <button
             onClick={generate}
-            disabled={loading}
+            disabled={starting}
             style={{
               padding:      "10px 32px",
-              background:   loading ? "#111" : colors.primary,
-              color:        loading ? colors.textGhost : colors.primaryText,
+              background:   starting ? "#111" : colors.primary,
+              color:        starting ? colors.textGhost : colors.primaryText,
               border:       "none",
               borderRadius: radius.md,
               fontFamily:   font.mono,
               fontSize:     font.sizeLg,
               fontWeight:   600,
-              cursor:       loading ? "not-allowed" : "pointer",
+              cursor:       starting ? "not-allowed" : "pointer",
               transition:   "all 0.2s",
               whiteSpace:   "nowrap",
             }}
           >
-            {loading ? "Generating…" : "Generate →"}
+            {starting ? "Starting…" : "Generate →"}
           </button>
         </div>
       </div>
-
-      {/* Loading spinner */}
-      {loading && (
-        <div style={{ marginTop: 48, display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
-          <div style={{ width: 40, height: 40, border: "2px solid #1e1e1e", borderTop: "2px solid #666", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
-          <span style={{ color: colors.textGhost, fontFamily: font.mono, fontSize: font.sizeMd }}>Dreaming…</span>
-        </div>
-      )}
 
       {/* Generated image + compiled prompt */}
       {imageUrl && (
