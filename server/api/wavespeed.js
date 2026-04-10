@@ -22,23 +22,52 @@ let WAVESPEED_API_KEY = process.env.WAVESPEED_API_KEY || "";
 const WAVESPEED_BASE_URL = "https://api.wavespeed.ai/api/v3"
 
 const WAVESPEED_UPLOAD_URL = `${WAVESPEED_BASE_URL}/media/upload/binary`
+
+// Seedream v4.5
 const WAVESPEED_SEEDREAM_URL = `${WAVESPEED_BASE_URL}/bytedance/seedream-v4.5`
 const WAVESPEED_SEEDREAM_EDIT_SEQUENTIAL_URL = `${WAVESPEED_BASE_URL}/bytedance/seedream-v4.5/edit`
+
+// Seedream v5 Lite
+const WAVESPEED_SEEDREAM_5_LITE_URL = `${WAVESPEED_BASE_URL}/bytedance/seedream-v5.0-lite`
+const WAVESPEED_SEEDREAM_5_LITE_EDIT_URL = `${WAVESPEED_BASE_URL}/bytedance/seedream-v5.0-lite/edit`
+
+// Qwen Image v2.0
 const WAVESPEED_QWEN_URL = `${WAVESPEED_BASE_URL}/wavespeed-ai/qwen-image-2.0`
 const WAVESPEED_QWEN_EDIT_URL = `${WAVESPEED_BASE_URL}/wavespeed-ai/qwen-image-2.0/edit`
+
+// Qwen Image v2.0 Pro
 const WAVESPEED_QWEN_PRO_URL = `${WAVESPEED_BASE_URL}/wavespeed-ai/qwen-image-2.0-pro`
 const WAVESPEED_QWEN_PRO_EDIT_URL = `${WAVESPEED_BASE_URL}/wavespeed-ai/qwen-image-2.0-pro/edit`
+
+// Nano Banana Pro
+const WAVESPEED_NANO_BANANA_PRO_URL = `${WAVESPEED_BASE_URL}/google/nano-banana-pro/text-to-image`
+const WAVESPEED_NANO_BANANA_PRO_EDIT_URL = `${WAVESPEED_BASE_URL}/google/nano-banana-pro/edit`
+
 const WAVESPEED_ANY_LLM_URL = `${WAVESPEED_BASE_URL}/wavespeed-ai/any-llm`
 const WAVESPEED_ANY_LLM_VISION_URL = `${WAVESPEED_BASE_URL}/wavespeed-ai/any-llm/vision`
+
 const WAVESPEED_POLLING = `https://api.wavespeed.ai/api/v3/predictions/`
+
 const WAVESPEED_UPSCALE_URL = `${WAVESPEED_BASE_URL}/wavespeed-ai/image-upscaler`
+
 const MODELS = {
     "seedream": {
         name: "Seedream v4.5",
+        link: WAVESPEED_SEEDREAM_URL,
         editLink: WAVESPEED_SEEDREAM_EDIT_SEQUENTIAL_URL,
         cost: '.04',
         min: 512,
-        max: 8192, poll: true
+        max: 8192, 
+        poll: true
+    },
+    "seedream5Lite": {
+        name: "Seedream v5 Lite",
+        cost: '.035',
+        link: WAVESPEED_SEEDREAM_5_LITE_URL,
+        editLink: WAVESPEED_SEEDREAM_5_LITE_EDIT_URL,
+        min: 512,
+        max: 8192, 
+        poll: true
     },
     "qwen-image-2.0": {
         name: "Qwen Image 2.0",
@@ -57,7 +86,16 @@ const MODELS = {
         poll: true,
         min: 512,
         max: 2048
-    }
+    },
+    /* "nano-banana-pro": {
+        name: "Nano Banana Pro",
+        link: WAVESPEED_NANO_BANANA_PRO_URL,
+        editLink: WAVESPEED_NANO_BANANA_PRO_EDIT_URL,
+        cost: ".119",
+        poll: true,
+        min: "2k",
+        max: "8k"
+    } */
 }
 
 const LLM_MODELS = {

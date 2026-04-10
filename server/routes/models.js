@@ -24,7 +24,7 @@ router.get("/models/comfyui/options", (req, res) => {
 router.get("/models/wavespeed/options", (req, res) => {
   res.json({
     ok:     true,
-    models: Object.fromEntries(Object.entries(wavespeed.MODELS).map(([k, v]) => [k, { name: v.name, min: v.min ?? 512, max: v.max }])),
+    models: Object.fromEntries(Object.entries(wavespeed.MODELS).map(([k, v]) => [k, { name: v.name, min: v.min ?? 512, max: v.max, cost: v.cost }])),
   });
 });
 

@@ -114,7 +114,7 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale, sse
   const totalCost      = entries.reduce((sum, e) => sum + parseFloat(e.cost || 0), 0);
   const hiddenCount    = entries.filter((e) => e.hidden).length;
   const visibleEntries = entries.filter((e) => showHidden ? true : !e.hidden);
-  console.log(visibleEntries)
+  
   return (
     <div style={{ margin: "0 auto", padding: "40px 8px" }}>
       {lightboxSrc && <ImageLightbox {...lightboxSrc} upscale={onUpscale} onClose={() => setLightboxSrc(null)} />}

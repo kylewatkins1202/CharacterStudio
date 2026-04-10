@@ -221,6 +221,10 @@ router.post("/generate", async (req, res) => {
     compiled.images.push(...uploadedReferenceUrls);
     compiled.rawPrompt = finalPrompt;
 
+    if (!compiled.rawPrompt) {
+      throw 'Error with raw prompt'
+    }
+
     // ── Create loading gallery entry & respond ─────────────────────────────
     const entryId = crypto.randomUUID();
     const loadingEntry = {
@@ -321,9 +325,7 @@ router.post("/generate", async (req, res) => {
           denoise,
           loras,
           scheduler,
-          sampler,
-          compiledPrompt: compiled.rawPrompt || null,
-          compiledImages: compiled.images    || [],
+          sampler
         };
 
         const updated = await db.gallery.updateGalleryEntry(entryId, patch);

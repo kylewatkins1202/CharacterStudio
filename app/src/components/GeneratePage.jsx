@@ -5,7 +5,7 @@ import { PromptInput } from "./PromptInput";
 import { ReferenceImageInput } from "./ReferenceImageInput";
 import { LocalOptions } from "./LocalOptions";
 import { colors, font, radius, fieldLabel as FL } from "../theme";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { CloudOptions } from "./CloudOptions";
 
 /**
@@ -62,12 +62,15 @@ export function GeneratePage({
   // True only while the server is acknowledging the generate request (brief)
   const [starting, setStarting] = useState(false);
   const [wsModels, setWsModels] = useState({});
-
+  
   useEffect(() => {
     api.get("/models/wavespeed/options").then((res) => {
       if (res.ok) setWsModels(res.models);
     }).catch(() => {});
   }, []);
+
+  console.log(wsModels?.[cloudModel]?.cost)
+  let generationCost = useMemo(() => (parseFloat(wsModels?.[cloudModel]?.cost ?? '0.0')).toLocaleString('en-US', { style: 'currency', currency: 'USD' }), [wsModels, cloudModel])
 
   // Clamp baseSize to the selected model's max when cloudModel or wsModels changes
   useEffect(() => {
@@ -326,7 +329,7 @@ export function GeneratePage({
               whiteSpace:   "nowrap",
             }}
           >
-            {starting ? "Starting…" : "Generate →"}
+            {starting ? "Starting…" : `Generate (${generationCost}) →`}
           </button>
         </div>
       </div>

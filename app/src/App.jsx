@@ -13,7 +13,7 @@ import { UpscalePage } from "./components/UpscalePage";
 
 const NAV_TABS = [
   ["generate", "Generate"],
-  ["gallery",  null],   // label computed below to include count badge
+  ["gallery",  "Gallery"],   // label computed below to include count badge
   ["upscale",  "Upscale"],
   ["tags",     "Tags"],
   ["assets",   "Assets"],
@@ -173,7 +173,7 @@ export default function App() {
         toast.add(`Reference image limit reached (${maxReferenceImages})`, "error");
         return p;
       }
-      return [...p, { assetId: asset.id, url: asset.url, purpose: asset.purpose || "" }];
+      return [...p, { assetId: asset.id, url: asset.url, purpose: "" }];
     });
     setPage("generate");
   }, [maxReferenceImages, toast]);
@@ -265,8 +265,6 @@ export default function App() {
    * @returns {string}
    */
   const navLabel = (id) => {
-    // Gallery tab gets a count badge when there are entries
-    if (id === "gallery") return galleryCount > 0 ? `Gallery (${galleryCount})` : "Gallery";
     // All other tabs use their static label from NAV_TABS
     return NAV_TABS.find(([tabId]) => tabId === id)?.[1] ?? id;
   };
