@@ -50,6 +50,11 @@ class GalleryTable extends DbTable {
     return data.entries || [];
   }
 
+  async getGalleryEntry(id) {
+    const db = await this.read();
+    return db.entries[id] || null;
+  }
+
   /**
    * Merge patch into an existing gallery entry and persist.
    *

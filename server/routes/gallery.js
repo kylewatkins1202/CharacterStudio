@@ -97,8 +97,21 @@ router.get("/gallery", async (req, res) => {
 
 router.delete("/gallery/:id", async (req, res) => {
   try {
+    const galleryImage = await db.gallery.getGalleryEntry(req.params.id)
+    const imageAssetId = galleryImage?.imageAssetId
+    
     const deleted = await db.gallery.deleteGalleryEntry(req.params.id);
+    
+    let deletedAsset
+
+    // Delete image asset id
+    if (imageAssetId) {
+      // Delete asset id
+      deletedAsset = await db.assets.deleteAsset(imageAssetId)
+    }
+
     if (!deleted) return res.status(404).json({ error: `entry not found: ${req.params.id}` });
+    if (!deletedAsset) return res.status(404).json({ error: `couldn't delete asset: ${req.params.id}` })
     res.json({ ok: true, deleted: req.params.id });
   } catch (error) {
     res.status(500).json({ error: "failed to delete gallery entry", details: error.message });
