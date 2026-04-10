@@ -65,6 +65,36 @@ async function populateEntry(entry) {
 
 // ─── Routes ──────────────────────────────────────────────────────────────────
 
+/**
+ * GET /gallery/meta
+ * Lightweight version check — no asset healing, just count + version token.
+ * The frontend calls this on gallery mount to decide whether to skip the full fetch.
+ */
+router.get("/gallery/meta", async (req, res) => {
+  try {
+    const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize) || 20));
+    const all      = await db.gallery.getGalleryEntries();
+
+    let filtered = all;
+    if (req.query.hidden !== undefined) {
+      const wantHidden = req.query.hidden === "true";
+      const assetList  = await db.assets.getAssets();
+      const hiddenById = Object.fromEntries(assetList.map((a) => [a.id, Boolean(a.hidden)]));
+      filtered = all.filter((entry) => {
+        const isHidden = entry.imageAssetId
+          ? Boolean(hiddenById[entry.imageAssetId])
+          : Boolean(entry.hidden);
+        return isHidden === wantHidden;
+      });
+    }
+
+    const total = filtered.length;
+    res.json({ ok: true, version: db.gallery.getVersion(), total, totalPages: Math.ceil(total / pageSize) || 1 });
+  } catch (error) {
+    res.status(500).json({ error: "failed to fetch gallery meta", details: error.message });
+  }
+});
+
 router.get("/gallery", async (req, res) => {
   try {
     const page     = Math.max(1, parseInt(req.query.page)     || 1);
@@ -89,7 +119,7 @@ router.get("/gallery", async (req, res) => {
     const total     = filtered.length;
     const slice     = filtered.slice((page - 1) * pageSize, page * pageSize);
     const populated = await Promise.all(slice.map(populateEntry));
-    res.json({ ok: true, total, page, pageSize, totalPages: Math.ceil(total / pageSize), count: populated.length, entries: populated });
+    res.json({ ok: true, version: db.gallery.getVersion(), total, page, pageSize, totalPages: Math.ceil(total / pageSize), count: populated.length, entries: populated });
   } catch (error) {
     res.status(500).json({ error: "failed to fetch gallery", details: error.message });
   }

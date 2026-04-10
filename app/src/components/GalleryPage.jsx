@@ -7,7 +7,7 @@ import { colors, font, radius } from "../theme";
 
 // ─── GalleryPage ──────────────────────────────────────────────────────────────
 
-export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale, sseEntries, onEntriesLoaded }) {
+export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale, sseEntries, onEntriesLoaded, galleryVersion, onVersionLoaded }) {
   // Local entry list — used when sseEntries (from App) is not yet populated
   const [localEntries, setLocalEntries] = useState([]);
   const [loading,      setLoading]      = useState(true);
@@ -45,19 +45,34 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale, sse
         setTotal(res.total ?? 0);
         setTotalPages(res.totalPages ?? 1);
         setPage(p);
+        if (res.version) onVersionLoaded(res.version);
       }
     } catch {
       toast.add("Failed to load gallery", "error");
     }
     setLoading(false);
-  }, [toast, pageSize, showHidden, onEntriesLoaded]);
+  }, [toast, pageSize, showHidden, onEntriesLoaded, onVersionLoaded]);
 
   useEffect(() => {
-    // Skip initial fetch if there are active loading jobs — the SSE list already
-    // has them and a fresh fetch would overwrite/lose those pending cards.
-    const hasActiveJobs = sseEntries?.some((e) => e.loading);
-    if (!hasActiveJobs) load(1);
-    else setLoading(false);
+    // Lightweight version check — if the gallery data hasn't changed since our
+    // last visit and we already have entries cached in sseEntries, skip the full
+    // fetch (which heals every asset on the page). Otherwise do the full fetch.
+    const init = async () => {
+      if (sseEntries !== null && galleryVersion !== null) {
+        try {
+          const meta = await api.get(`/gallery/meta?pageSize=${pageSize}&hidden=false`);
+          if (meta.ok && meta.version === galleryVersion) {
+            // Data unchanged — use cached entries, refresh counts from meta
+            setTotal(meta.total);
+            setTotalPages(meta.totalPages);
+            setLoading(false);
+            return;
+          }
+        } catch {}
+      }
+      load(1);
+    };
+    init();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

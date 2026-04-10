@@ -127,6 +127,9 @@ export default function App() {
   // null  = no SSE snapshot yet (GalleryPage will fetch on mount as usual)
   // array = live entries maintained by SSE; GalleryPage reads from here
   const [sseEntries, setSseEntries] = useState(null);
+  // Version token from the last gallery fetch — used by GalleryPage to skip
+  // the full fetch when data hasn't changed since the last visit.
+  const [galleryVersion, setGalleryVersion] = useState(null);
 
   useEffect(() => {
     const es = new EventSource("/api/events");
@@ -414,6 +417,8 @@ export default function App() {
           onUpscale={handleUpscale}
           sseEntries={sseEntries}
           onEntriesLoaded={setSseEntries}
+          galleryVersion={galleryVersion}
+          onVersionLoaded={setGalleryVersion}
         />
       )}
 

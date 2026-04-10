@@ -21,7 +21,14 @@ class GalleryTable extends DbTable {
     this.DIRECTORY   = GALLERY_DB_PATH;
     // Default structure written on first run
     this.declaration = { entries: [] };
+    // In-memory version token — bumped on any mutation so the frontend can
+    // detect staleness with a lightweight /gallery/meta request instead of a
+    // full fetch. Resets on server restart, which correctly forces a re-fetch.
+    this._version = String(Date.now());
   }
+
+  bumpVersion() { this._version = String(Date.now()); }
+  getVersion()  { return this._version; }
 
   // ─── Gallery queries ─────────────────────────────────────────────────────────
 
@@ -36,6 +43,7 @@ class GalleryTable extends DbTable {
       data.entries.unshift(entry);
       return data;
     });
+    this.bumpVersion();
     return entry;
   }
 
@@ -52,7 +60,7 @@ class GalleryTable extends DbTable {
 
   async getGalleryEntry(id) {
     const db = await this.read();
-    return db.entries[id] || null;
+    return db.entries.find(e => e.id === id) || null;
   }
 
   /**
@@ -72,6 +80,7 @@ class GalleryTable extends DbTable {
       }
       return data;
     });
+    if (updated) this.bumpVersion();
     return updated;
   }
 
@@ -89,6 +98,7 @@ class GalleryTable extends DbTable {
       removed = data.entries.length < before;
       return data;
     });
+    if (removed) this.bumpVersion();
     return removed;
   }
 }
