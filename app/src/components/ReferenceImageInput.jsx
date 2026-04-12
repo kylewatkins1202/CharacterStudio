@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useCallback } from "react";
 import { toBase64 } from "../lib/api";
 import { REFERENCE_PURPOSES } from "../lib/constants";
 import { colors, font, radius, fieldInput as FI } from "../theme";
@@ -104,6 +104,24 @@ export function ReferenceImageInput({ images, onChange, maxImages }) {
   const inputRef      = useRef();
   const [dragging,    setDragging]    = useState(false);
   const [showPicker,  setShowPicker]  = useState(false);
+  const dragIdx       = useRef(null);
+  const [dragOver,    setDragOver]    = useState(null);
+
+  const handleItemDragStart = useCallback((i) => { dragIdx.current = i; }, []);
+  const handleItemDragOver  = useCallback((e, i) => { e.preventDefault(); setDragOver(i); }, []);
+  const handleItemDragLeave = useCallback(() => setDragOver(null), []);
+  const handleItemDrop      = useCallback((e, i) => {
+    e.preventDefault();
+    setDragOver(null);
+    if (dragIdx.current === null || dragIdx.current === i) return;
+    onChange((p) => {
+      const arr = [...p];
+      const [moved] = arr.splice(dragIdx.current, 1);
+      arr.splice(i, 0, moved);
+      return arr;
+    });
+    dragIdx.current = null;
+  }, [onChange]);
 
   const existingAssetIds = images.filter((i) => i.assetId).map((i) => i.assetId);
   const atLimit = maxImages != null && images.length >= maxImages;
@@ -223,15 +241,27 @@ export function ReferenceImageInput({ images, onChange, maxImages }) {
       {images.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {images.map((item, i) => (
-            <div key={i} style={{
-              display:      "flex",
-              alignItems:   "center",
-              gap:          10,
-              background:   colors.surface,
-              border:       `1px solid ${colors.borderMid}`,
-              borderRadius: radius.md,
-              padding:      "8px 10px",
-            }}>
+            <div
+              key={i}
+              draggable
+              onDragStart={() => handleItemDragStart(i)}
+              onDragOver={(e) => handleItemDragOver(e, i)}
+              onDragLeave={handleItemDragLeave}
+              onDrop={(e) => handleItemDrop(e, i)}
+              style={{
+                display:      "flex",
+                alignItems:   "center",
+                gap:          10,
+                background:   colors.surface,
+                border:       `1px solid ${dragOver === i ? colors.primary : colors.borderMid}`,
+                borderRadius: radius.md,
+                padding:      "8px 10px",
+                cursor:       "grab",
+                transition:   "border-color 0.1s",
+              }}
+            >
+              {/* Drag handle */}
+              <span style={{ color: colors.borderStrong, fontSize: 14, flexShrink: 0, userSelect: "none" }}>⠿</span>
               {/* Thumbnail */}
               <div style={{
                 width:        52,

@@ -6,11 +6,13 @@ import { colors, font, radius } from "../theme";
 // ─── AssetPickerModal ─────────────────────────────────────────────────────────
 
 export function AssetPickerModal({ onClose, onSelect, title = "Pick from assets", excludeIds = [] }) {
-  const [assets,      setAssets]      = useState([]);
-  const [loading,     setLoading]     = useState(true);
-  const [selected,    setSelected]    = useState(new Set());
-  const [showHidden,  setShowHidden]  = useState(false);
-  const [showAll,     setShowAll]     = useState(false);
+  const [assets,       setAssets]       = useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [selected,     setSelected]     = useState(new Set());
+  const [showHidden,   setShowHidden]   = useState(false);
+  const [showAll,      setShowAll]      = useState(false);
+  const [folders,      setFolders]      = useState([]);
+  const [activeFolder, setActiveFolder] = useState(null); // null = All
 
   // Pagination
   const [page,       setPage]       = useState(1);
@@ -18,10 +20,11 @@ export function AssetPickerModal({ onClose, onSelect, title = "Pick from assets"
   const [total,      setTotal]      = useState(0);
   const [totalPages, setTotalPages] = useState(1);
 
-  const load = useCallback((p = 1, hidden = showHidden) => {
+  const load = useCallback((p = 1, hidden = showHidden, folder = activeFolder) => {
     setLoading(true);
-    const hiddenParam = hidden ? "" : "&hidden=false";
-    api.get(`/assets?page=${p}&pageSize=${pageSize}${hiddenParam}`)
+    const hiddenParam  = hidden ? "" : "&hidden=false";
+    const folderParam  = folder ? `&folder=${encodeURIComponent(folder)}` : "";
+    api.get(`/assets?page=${p}&pageSize=${pageSize}${hiddenParam}${folderParam}`)
       .then((res) => {
         if (res.ok) {
           setAssets(res.assets);
@@ -31,7 +34,14 @@ export function AssetPickerModal({ onClose, onSelect, title = "Pick from assets"
         }
       })
       .finally(() => setLoading(false));
-  }, [pageSize, showHidden]);
+  }, [pageSize, showHidden, activeFolder]);
+
+  // Load folder list once on mount
+  useEffect(() => {
+    api.get("/assets/folders").then((res) => {
+      if (res.ok) setFolders(res.folders);
+    });
+  }, []);
 
   useEffect(() => { load(1); }, [load]);
 
@@ -163,6 +173,47 @@ export function AssetPickerModal({ onClose, onSelect, title = "Pick from assets"
             >×</button>
           </div>
         </div>
+
+        {/* Folder tabs */}
+        {folders.length > 0 && (
+          <div style={{ display: "flex", gap: 6, padding: "10px 20px", borderBottom: `1px solid ${colors.border}`, overflowX: "auto", flexShrink: 0 }}>
+            <button
+              onClick={() => { setActiveFolder(null); load(1, showHidden, null); }}
+              style={{
+                padding:      "4px 12px",
+                background:   activeFolder === null ? colors.borderMid : "transparent",
+                border:       `1px solid ${activeFolder === null ? colors.borderStrong : colors.border}`,
+                borderRadius: radius.md,
+                color:        activeFolder === null ? colors.textMid : colors.textMuted,
+                fontFamily:   font.mono,
+                fontSize:     font.sizeSm,
+                cursor:       "pointer",
+                whiteSpace:   "nowrap",
+                transition:   "all 0.15s",
+              }}
+            >All</button>
+            {folders.map((f) => (
+              <button
+                key={f.name}
+                onClick={() => { setActiveFolder(f.name); load(1, showHidden, f.name); }}
+                style={{
+                  padding:      "4px 12px",
+                  background:   activeFolder === f.name ? colors.borderMid : "transparent",
+                  border:       `1px solid ${activeFolder === f.name ? colors.borderStrong : colors.border}`,
+                  borderRadius: radius.md,
+                  color:        activeFolder === f.name ? colors.textMid : colors.textMuted,
+                  fontFamily:   font.mono,
+                  fontSize:     font.sizeSm,
+                  cursor:       "pointer",
+                  whiteSpace:   "nowrap",
+                  transition:   "all 0.15s",
+                }}
+              >
+                {f.name} <span style={{ color: colors.textGhost, fontSize: 10 }}>({f.count})</span>
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Grid */}
         <div style={{ overflowY: "auto", padding: 20, flex: 1 }}>

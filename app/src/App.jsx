@@ -430,9 +430,9 @@ export default function App() {
         <TagsPage tags={tags} onTagsChange={loadTags} toast={toast} />
       </div>
 
-      {page === "assets" && (
+      <div style={{ display: page === "assets" ? "block" : "none" }}>
         <AssetsPage toast={toast} onAddReference={handleAddReference} />
-      )}
+      </div>
 
       <Toast toasts={toast.toasts} remove={toast.remove} />
     </>

@@ -24,7 +24,7 @@ const wavespeed = require("../api/wavespeed");
 const comfyui = require("../api/comfyui")
 const { parseBase64Image } = require("../utils/imageCollage");
 const { extractTags, compilePrompt } = require("../utils/tagCompiler");
-const { healTagAssets, healReferenceItems, healAsset, saveAssetLocally } = require("../utils/assets");
+const { healTagAssets, healReferenceItems, healAsset, saveToFolder } = require("../utils/assets");
 const emitter = require("../utils/sseEmitter");
 const { activeJobs } = require("./events");
 const { populateEntry } = require("./gallery");
@@ -163,7 +163,7 @@ router.post("/generate", async (req, res) => {
         const parsed   = parseBase64Image(b64);
         const filename = `ref-${Date.now()}-${i}.${parsed.ext}`;
         const uploaded = await wavespeed.uploadBufferToWaveSpeed(parsed.buffer, filename, parsed.mimeType);
-        const { localPath, assetPath } = await saveAssetLocally("refs", "reference", filename, parsed.buffer);
+        const { localPath, assetPath } = await saveToFolder("assets", filename, parsed.buffer);
         const asset = await db.assets.createAsset({
           id:        crypto.randomUUID(),
           url:       uploaded.url,
@@ -296,7 +296,7 @@ router.post("/generate", async (req, res) => {
               const contentType = imgRes.headers.get("content-type") || "image/jpeg";
               const ext         = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
               const filename    = `generated-${Date.now()}.${ext}`;
-              const { localPath, assetPath } = await saveAssetLocally("generated", "result", filename, buffer);
+              const { localPath, assetPath } = await saveToFolder("generated", filename, buffer);
               const imageAsset = await db.assets.createAsset({
                 id:        crypto.randomUUID(),
                 url:       imageUrl,
@@ -404,7 +404,7 @@ router.post("/upscale", async (req, res) => {
         const filename = `upscaled-${targetResolution}-${Date.now()}.png`;
         const contentType = imgRes.headers.get("content-type") || "image/jpeg";
         const ext         = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
-        const { localPath, assetPath } = await saveAssetLocally("upscaled", "upscale", filename, buffer);
+        const { localPath, assetPath } = await saveToFolder("upscaled", filename, buffer);
 
         // Create asset
         const imageAsset = await db.assets.createAsset({

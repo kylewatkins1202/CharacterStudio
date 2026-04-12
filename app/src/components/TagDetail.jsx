@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { api } from "../lib/api";
 import { TagPill } from "./TagPill";
 import { ImageUploadGrid } from "./ImageUploadGrid";
@@ -20,6 +20,15 @@ export function TagDetail({ tag, onClose, onUpdated, onDeleted, toast }) {
   const [saving,       setSaving]       = useState(false);
   // True when the delete-confirmation dialog is shown
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Local hidden state — starts from the tag prop
+  const [hidden, setHidden] = useState(Boolean(tag.hidden));
+
+  const handleToggleHidden = useCallback(async () => {
+    const next = !hidden;
+    const res = await api.patch(`/tags/${tag.key}`, { hidden: next });
+    if (res.ok) { setHidden(next); onUpdated(res.tag); }
+    else toast.add("Failed to update", "error");
+  }, [hidden, tag.key, onUpdated, toast]);
 
   const groups =
     tag.type === "character" ? ["face", "body"] :
@@ -145,6 +154,12 @@ export function TagDetail({ tag, onClose, onUpdated, onDeleted, toast }) {
             <TagPill type={tag.type} />
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <button
+              onClick={handleToggleHidden}
+              style={{ padding: "6px 14px", background: hidden ? colors.borderMid : "none", border: `1px solid ${colors.borderStrong}`, borderRadius: radius.md - 2, color: colors.textMuted, fontFamily: font.mono, fontSize: font.sizeMd, cursor: "pointer", transition: "all 0.15s" }}
+            >
+              {hidden ? "Unhide" : "Hide"}
+            </button>
             <button
               onClick={() => setConfirmDelete(true)}
               style={{ padding: "6px 14px", background: "none", border: `1px solid ${colors.borderStrong}`, borderRadius: radius.md - 2, color: colors.textMuted, fontFamily: font.mono, fontSize: font.sizeMd, cursor: "pointer", transition: "all 0.15s" }}

@@ -26,7 +26,7 @@ const db      = require("../db");
 const { uploadBufferToWaveSpeed } = require("../api/wavespeed");
 const { sanitizeTagKey, parseBase64Image } = require("../utils/imageCollage");
 const { TAG_TYPES, ASSET_GROUPS, buildTagRecord } = require("../utils/tagCompiler");
-const { saveAssetLocally } = require("../utils/assets");
+const { saveToFolder } = require("../utils/assets");
 
 const router = express.Router();
 
@@ -101,7 +101,7 @@ function serializeTag(tag) {
  */
 async function createTagAsset({ tagKey, group, parsed, filename }) {
   const uploaded                  = await uploadBufferToWaveSpeed(parsed.buffer, filename, parsed.mimeType);
-  const { localPath, assetPath }  = await saveAssetLocally(tagKey, group, filename, parsed.buffer);
+  const { localPath, assetPath }  = await saveToFolder("assets", filename, parsed.buffer);
   return db.assets.createAsset({
     id:        crypto.randomUUID(),
     url:       uploaded.url,
@@ -281,6 +281,23 @@ router.delete("/tags/:key/images", async (req, res) => {
     res.json({ ok: true, totalDeleted, deleted, tag: serializeTag(await populateTag(updated)) });
   } catch (error) {
     res.status(500).json({ error: "failed to delete images from tag", details: error.message });
+  }
+});
+
+router.patch("/tags/:key", async (req, res) => {
+  try {
+    const key = sanitizeTagKey(req.params.key);
+    const tag = await db.tags.getTag(key);
+    if (!tag) return res.status(404).json({ error: `tag not found: ${key}` });
+    const updated = await db.tags.updateTag(key, (t) => {
+      if (typeof req.body.hidden === "boolean") t.hidden = req.body.hidden;
+      t.meta = t.meta || {};
+      t.meta.updatedAt = new Date().toISOString();
+      return t;
+    });
+    res.json({ ok: true, tag: serializeTag(await populateTag(updated)) });
+  } catch (error) {
+    res.status(500).json({ error: "failed to update tag", details: error.message });
   }
 });
 

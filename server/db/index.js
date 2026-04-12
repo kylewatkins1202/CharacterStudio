@@ -12,6 +12,7 @@
 
 const fs      = require("fs/promises");
 const { DATA_DIR, DOWNLOADS_DIR, ASSETS_DIR } = require("./core");
+const { migrateAssetsFolders } = require("../scripts/migrate-assets-folders");
 
 // Singleton table instances
 const tags     = require("./tags");
@@ -43,9 +44,11 @@ async function setupDb() {
   await cache.ensureDbTable();
   await settings.ensureDbTable();
   await assets.ensureDbTable();
+  // Run one-time folder-structure migration (no-op after first run)
+  await migrateAssetsFolders(database);
 }
 
-module.exports = {
+const database = {
   setupDb,
 
   // ─── Path constants ────────────────────────────────────────────────────────
@@ -60,3 +63,5 @@ module.exports = {
   settings,
   assets,
 };
+
+module.exports = database

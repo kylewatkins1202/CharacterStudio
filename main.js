@@ -76,10 +76,8 @@ async function bootstrap() {
       await startComfyUI();
     }
 
-    if (!isDev) {
-      console.log("Starting local server...");
-      await startServer();
-    }
+    console.log("Starting local server...");
+    await startServer();
 
     createWindow();
 

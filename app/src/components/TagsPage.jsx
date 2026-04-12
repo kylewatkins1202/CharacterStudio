@@ -18,18 +18,19 @@ import { TYPE_COLOR, TYPE_ICON, colors, font, radius, fieldInput as FI } from ".
 export function TagsPage({ tags, onTagsChange, toast }) {
   // Text used to filter tag keys
   const [search,      setSearch]      = useState("");
-  // Active type filter — null means all types are shown
   const [typeFilter,  setTypeFilter]  = useState(null);
-  // True when the create-tag modal is open
   const [showCreate,  setShowCreate]  = useState(false);
-  // The tag currently open in the detail modal (null when closed)
   const [selectedTag, setSelectedTag] = useState(null);
+  const [showHidden,  setShowHidden]  = useState(false);
+  const [showAll,     setShowAll]     = useState(false);
 
-  // Tags that pass both the search text and the active type filter
   const filtered = tags.filter((t) =>
     t.key.toLowerCase().includes(search.toLowerCase()) &&
-    (!typeFilter || t.type === typeFilter)
+    (!typeFilter || t.type === typeFilter) &&
+    (showHidden || !t.hidden)
   );
+
+  const hiddenCount = tags.filter((t) => t.hidden).length;
 
   return (
     <div style={{ maxWidth: 940, margin: "0 auto", padding: "40px 24px" }}>
@@ -43,12 +44,30 @@ export function TagsPage({ tags, onTagsChange, toast }) {
             {tags.length} tag{tags.length !== 1 ? "s" : ""}
           </p>
         </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          style={{ padding: "10px 20px", background: colors.primary, border: "none", borderRadius: radius.md, color: colors.primaryText, fontFamily: font.mono, fontSize: font.sizeLg, fontWeight: 600, cursor: "pointer", letterSpacing: "0.04em" }}
-        >
-          + New Tag
-        </button>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {showHidden && (
+            <button
+              onClick={() => setShowAll((v) => !v)}
+              style={{ padding: "8px 14px", background: showAll ? colors.borderMid : "transparent", border: `1px solid ${colors.borderStrong}`, borderRadius: radius.md, color: colors.textMuted, fontFamily: font.mono, fontSize: font.sizeMd, cursor: "pointer" }}
+            >
+              {showAll ? "Hide all" : "Show all"}
+            </button>
+          )}
+          {hiddenCount > 0 && (
+            <button
+              onClick={() => { const next = !showHidden; setShowHidden(next); if (!next) setShowAll(false); }}
+              style={{ padding: "8px 14px", background: showHidden ? colors.borderMid : "transparent", border: `1px solid ${showHidden ? colors.borderStrong : colors.border}`, borderRadius: radius.md, color: showHidden ? colors.textMuted : colors.borderStrong, fontFamily: font.mono, fontSize: font.sizeMd, cursor: "pointer" }}
+            >
+              {showHidden ? "Hide hidden" : `Show hidden (${hiddenCount})`}
+            </button>
+          )}
+          <button
+            onClick={() => setShowCreate(true)}
+            style={{ padding: "10px 20px", background: colors.primary, border: "none", borderRadius: radius.md, color: colors.primaryText, fontFamily: font.mono, fontSize: font.sizeLg, fontWeight: 600, cursor: "pointer", letterSpacing: "0.04em" }}
+          >
+            + New Tag
+          </button>
+        </div>
       </div>
 
       {/* Search + type filter */}
@@ -92,16 +111,17 @@ export function TagsPage({ tags, onTagsChange, toast }) {
           {filtered.map((tag) => {
             const allAssets = Object.values(tag.assets).flat();
             const preview   = allAssets[0]?.url;
+            const dimmed    = tag.hidden && !showAll;
             return (
               <div
                 key={tag.key}
                 onClick={() => setSelectedTag(tag)}
-                style={{ background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: radius.xl, overflow: "hidden", cursor: "pointer", transition: "border-color 0.15s, transform 0.15s" }}
+                style={{ background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: radius.xl, overflow: "hidden", cursor: "pointer", transition: "border-color 0.15s, transform 0.15s", opacity: dimmed ? 0.4 : 1 }}
                 onMouseEnter={(e) => { e.currentTarget.style.borderColor = colors.borderStrong; e.currentTarget.style.transform = "translateY(-2px)"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.borderColor = colors.border; e.currentTarget.style.transform = "translateY(0)"; }}
               >
                 {preview
-                  ? <div style={{ height: 130, overflow: "hidden" }}><img src={preview} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} /></div>
+                  ? <div style={{ height: 130, overflow: "hidden" }}><img src={preview} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" ,...(dimmed && {filter: 'blur(10px)'})}} /></div>
                   : <div style={{ height: 72, background: colors.surfaceDeep, display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ color: TYPE_COLOR[tag.type] + "44", fontSize: 28 }}>{TYPE_ICON[tag.type]}</span></div>
                 }
                 <div style={{ padding: "10px 12px" }}>

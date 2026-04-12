@@ -151,4 +151,17 @@ async function healReferenceItems(items) {
   }));
 }
 
-module.exports = { saveAssetLocally, healAsset, healTagAssets, healReferenceItems };
+/**
+ * Save an image buffer directly into a named top-level folder.
+ * Path: {ASSETS_DIR}/{folder}/{filename}
+ * Preferred save path for all new uploads (assets, generated, upscaled, refs).
+ */
+async function saveToFolder(folder, filename, buffer) {
+  const dir       = path.join(db.ASSETS_DIR, folder);
+  await fs.mkdir(dir, { recursive: true });
+  const localPath = path.join(dir, filename);
+  await fs.writeFile(localPath, buffer);
+  return { localPath, assetPath: `${folder}/${filename}` };
+}
+
+module.exports = { saveAssetLocally, saveToFolder, healAsset, healTagAssets, healReferenceItems };
