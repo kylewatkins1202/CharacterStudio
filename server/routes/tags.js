@@ -26,7 +26,7 @@ const db      = require("../db");
 const { uploadBufferToWaveSpeed } = require("../api/wavespeed");
 const { sanitizeTagKey, parseBase64Image } = require("../utils/imageCollage");
 const { TAG_TYPES, ASSET_GROUPS, buildTagRecord } = require("../utils/tagCompiler");
-const { saveToFolder } = require("../utils/assets");
+const { saveToFolder, healAsset } = require("../utils/assets");
 
 const router = express.Router();
 
@@ -163,6 +163,24 @@ router.post("/tag", async (req, res) => {
 router.get("/tags", async (req, res) => {
   try {
     const tagList    = await db.tags.searchTags(String(req.query.key || "").trim());
+    
+    let assetIds = tagList.map(tag => {
+      const {face, body, prop, outfit, location} = tag.assetIds || {}
+      return [...(face || []), ...(body || []), ...(prop || []), ...(outfit || []), ...(location || [])];
+    }).flat();
+
+    // Heal tags
+    (await Promise.all(
+      assetIds.map(async (item) => {
+        const assetId = typeof item === "string" ? item : item.id;
+        const purpose = (typeof item === "object" && item.purpose) ? item.purpose : "";
+        const asset   = await db.assets.getAsset(assetId);
+        if (!asset) return null;
+        const healed  = await healAsset(asset);
+        return healed ? { id: healed.id, url: healed.url, purpose } : null;
+      })
+    )).filter(Boolean)
+    
     const populated  = await Promise.all(tagList.map(populateTag));
     res.json({ ok: true, count: populated.length, tags: populated.map(serializeTag) });
   } catch (error) {

@@ -130,7 +130,7 @@ export function ReferenceImageInput({ images, onChange, maxImages }) {
     const srcs = await Promise.all(Array.from(fileList).map(toBase64));
     onChange((p) => {
       const remaining = maxImages != null ? Math.max(0, maxImages - p.length) : srcs.length;
-      return [...p, ...srcs.slice(0, remaining).map((src) => ({ src, isUrl: false, purpose: "composition" }))];
+      return [...p, ...srcs.slice(0, remaining).map((src) => ({ src, isUrl: false, purpose: "" }))];
     });
   };
 
@@ -209,7 +209,7 @@ export function ReferenceImageInput({ images, onChange, maxImages }) {
 
       {!atLimit && (
         <UrlReferenceInput
-          onAdd={(url) => onChange((p) => [...p, { url, isUrl: true, purpose: "composition" }])}
+          onAdd={(url) => onChange((p) => [...p, { url, isUrl: true, purpose: "" }])}
         />
       )}
 

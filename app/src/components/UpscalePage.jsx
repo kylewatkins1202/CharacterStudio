@@ -16,7 +16,7 @@ export function UpscalePage({ toast, images, onImagesChange }) {
     setResult(null);
     try {
       const img = images[0];
-      const res = await api.post("/image/upscale", {
+      const res = await api.post("/generate/upscale", {
         image: img,
         targetResolution: resolution,
       });

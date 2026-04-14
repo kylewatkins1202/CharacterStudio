@@ -82,7 +82,7 @@ const PURPOSE_DIRECTIVES = {
 
 // ─── Route ───────────────────────────────────────────────────────────────────
 
-router.post("/generate", async (req, res) => {
+router.post("/image", async (req, res) => {
   try {
     const prompt             = String(req.body.prompt || "");
     const negPrompt          = String(req.body.negPrompt || "");

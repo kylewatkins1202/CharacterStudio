@@ -62,6 +62,18 @@ export function GeneratePage({
   // True only while the server is acknowledging the generate request (brief)
   const [starting, setStarting] = useState(false);
   const [wsModels, setWsModels] = useState({});
+  // Per-tag descriptor overrides: { [tagKey]: { appearance?: bool, bodyShape?: bool, basic?: bool } }
+  const [tagOverrides, setTagOverrides] = useState({});
+
+  // Tags currently referenced in the prompt via @key tokens
+  const referencedTags = useMemo(() => {
+    const hits = new Set([...prompt.matchAll(/@(\S+)/g)].map((m) => m[1]));
+    return tags.filter((t) => hits.has(t.key));
+  }, [prompt, tags]);
+
+  const getOverride = (key, field) => tagOverrides[key]?.[field] ?? true;
+  const setOverride = (key, field, value) =>
+    setTagOverrides((prev) => ({ ...prev, [key]: { ...(prev[key] || {}), [field]: value } }));
   
   useEffect(() => {
     api.get("/models/wavespeed/options").then((res) => {
@@ -116,10 +128,11 @@ export function GeneratePage({
         referenceImages:    referenceImages.filter((i) => !i.assetId && !i.isUrl).map((i) => ({ data: i.src, purpose: i.purpose })),
         // Pasted URLs — healed if a matching asset exists, used as-is otherwise
         referenceImageUrls: referenceImages.filter((i) => i.isUrl).map((i) => ({ url: i.url || i.src, purpose: i.purpose })),
+        tagLocks: tagOverrides,
         resetCache,
       };
 
-      const res = await api.post("/image/generate", body);
+      const res = await api.post("/generate/image", body);
 
       if (res.ok) {
         toast.add("Generation started!", "success");
@@ -194,6 +207,71 @@ export function GeneratePage({
           mode === 'local' &&
             <PromptInput value={negPrompt} onChange={setNegPrompt} placeholder={"Negative prompt…"}></PromptInput>
         }
+
+        {/* Per-tag descriptor toggles */}
+        {mode === 'wavespeed' && referencedTags.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {referencedTags.map((tag) => {
+              const isChar   = tag.type === "character";
+              const hasAppear = isChar && !!tag.lock?.appearanceDescription;
+              const hasBody   = isChar && !!tag.lock?.bodyDescription;
+              const hasBasic  = !isChar && !!tag.lock?.basicDescription;
+              const hasAny    = hasAppear || hasBody || hasBasic;
+
+              // Available fields for the "All" checkbox
+              const allOn = (
+                (!hasAppear || getOverride(tag.key, "appearance")) &&
+                (!hasBody   || getOverride(tag.key, "bodyShape")) &&
+                (!hasBasic  || getOverride(tag.key, "basic"))
+              );
+              const toggleAll = (value) => {
+                setTagOverrides((prev) => ({
+                  ...prev,
+                  [tag.key]: {
+                    ...(hasAppear ? { appearance: value } : {}),
+                    ...(hasBody   ? { bodyShape:  value } : {}),
+                    ...(hasBasic  ? { basic:       value } : {}),
+                  },
+                }));
+              };
+
+              return (
+                <div key={tag.key} style={{ display: "flex", alignItems: "center", gap: 12, background: colors.surface, border: `1px solid ${colors.borderMid}`, borderRadius: radius.md, padding: "8px 12px" }}>
+                  <span style={{ fontFamily: font.mono, fontSize: font.sizeMd, color: colors.textMid, flexShrink: 0 }}>@{tag.key}</span>
+                  {!hasAny ? (
+                    <span style={{ fontFamily: font.mono, fontSize: font.sizeSm, color: colors.borderStrong }}>no descriptions</span>
+                  ) : (
+                    <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
+                      {/* All toggle */}
+                      <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", userSelect: "none" }}>
+                        <input type="checkbox" checked={allOn} onChange={(e) => toggleAll(e.target.checked)} style={{ accentColor: colors.primary, cursor: "pointer" }} />
+                        <span style={{ fontFamily: font.mono, fontSize: font.sizeSm, color: colors.textMuted }}>All</span>
+                      </label>
+                      {hasAppear && (
+                        <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", userSelect: "none" }}>
+                          <input type="checkbox" checked={getOverride(tag.key, "appearance")} onChange={(e) => setOverride(tag.key, "appearance", e.target.checked)} style={{ accentColor: colors.primary, cursor: "pointer" }} />
+                          <span style={{ fontFamily: font.mono, fontSize: font.sizeSm, color: colors.textMuted }}>Appearance</span>
+                        </label>
+                      )}
+                      {hasBody && (
+                        <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", userSelect: "none" }}>
+                          <input type="checkbox" checked={getOverride(tag.key, "bodyShape")} onChange={(e) => setOverride(tag.key, "bodyShape", e.target.checked)} style={{ accentColor: colors.primary, cursor: "pointer" }} />
+                          <span style={{ fontFamily: font.mono, fontSize: font.sizeSm, color: colors.textMuted }}>Body shape</span>
+                        </label>
+                      )}
+                      {hasBasic && (
+                        <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", userSelect: "none" }}>
+                          <input type="checkbox" checked={getOverride(tag.key, "basic")} onChange={(e) => setOverride(tag.key, "basic", e.target.checked)} style={{ accentColor: colors.primary, cursor: "pointer" }} />
+                          <span style={{ fontFamily: font.mono, fontSize: font.sizeSm, color: colors.textMuted }}>Description</span>
+                        </label>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
         {/* Reference images */}
         <div>
           <label style={FL}>

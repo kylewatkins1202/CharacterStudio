@@ -52,6 +52,8 @@ const WAVESPEED_UPSCALE_URL = `${WAVESPEED_BASE_URL}/wavespeed-ai/image-upscaler
 
 const MODELS = {
     "seedream": {
+        modelId: "bytedance/seedream-v4.5",
+        editModelId: "bytedance/seedream-v4.5/edit",
         name: "Seedream v4.5",
         link: WAVESPEED_SEEDREAM_URL,
         editLink: WAVESPEED_SEEDREAM_EDIT_SEQUENTIAL_URL,
@@ -61,6 +63,8 @@ const MODELS = {
         poll: true
     },
     "seedream5Lite": {
+        modelId: "bytedance/seedream-v5.0-lite",
+        editModelId: "bytedance/seedream-v5.0-lite/edit",
         name: "Seedream v5 Lite",
         cost: '.035',
         link: WAVESPEED_SEEDREAM_5_LITE_URL,
@@ -70,6 +74,8 @@ const MODELS = {
         poll: true
     },
     "qwen-image-2.0": {
+        modelId: "wavespeed-ai/qwen-image-2.0",
+        editModelId: "wavespeed-ai/qwen-image-2.0/edit",
         name: "Qwen Image 2.0",
         link: WAVESPEED_QWEN_URL,
         editLink: WAVESPEED_QWEN_EDIT_URL,
@@ -79,6 +85,8 @@ const MODELS = {
         max: 2048
     },
     "qwen-image-2.0-pro": {
+        modelId: "wavespeed-ai/qwen-image-2.0-pro",
+        editModelId: "wavespeed-ai/qwen-image-2.0-pro/edit",
         name: "Qwen Image 2.0 Pro",
         link: WAVESPEED_QWEN_PRO_URL,
         editLink: WAVESPEED_QWEN_PRO_EDIT_URL,
@@ -88,6 +96,8 @@ const MODELS = {
         max: 2048
     },
     /* "nano-banana-pro": {
+        modelId: "google/nano-banana-pro/text-to-image",
+        modelId: "google/nano-banana-pro/edit",
         name: "Nano Banana Pro",
         link: WAVESPEED_NANO_BANANA_PRO_URL,
         editLink: WAVESPEED_NANO_BANANA_PRO_EDIT_URL,
