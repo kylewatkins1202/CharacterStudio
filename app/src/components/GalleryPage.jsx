@@ -273,7 +273,7 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale, sse
                           ↑ Use
                         </button>
                         <button
-                          onClick={() => { onAddReference({ id: entry.imageAssetId, url: entry.imageUrl, purpose: "composition" }); toast.add("Added as reference", "success"); }}
+                          onClick={() => { onAddReference({ id: entry.imageAssetId, url: entry.imageUrl, purpose: "" }); toast.add("Added as reference", "success"); }}
                           style={{ padding: "4px 10px", background: "none", border: `1px solid ${colors.borderMid}`, borderRadius: radius.md - 2, color: colors.textMuted, fontFamily: font.mono, fontSize: font.sizeSm, cursor: "pointer", transition: "all 0.15s", whiteSpace: "nowrap" }}
                           onMouseEnter={(e) => { e.currentTarget.style.borderColor = colors.tagLocationA; e.currentTarget.style.color = colors.tagLocation; }}
                           onMouseLeave={(e) => { e.currentTarget.style.borderColor = colors.borderMid; e.currentTarget.style.color = colors.textMuted; }}

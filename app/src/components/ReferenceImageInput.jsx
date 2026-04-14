@@ -156,7 +156,7 @@ export function ReferenceImageInput({ images, onChange, maxImages }) {
   const handlePickAssets = (assets) => {
     onChange((p) => {
       const remaining = maxImages != null ? Math.max(0, maxImages - p.length) : assets.length;
-      return [...p, ...assets.slice(0, remaining).map((a) => ({ assetId: a.id, url: a.url, purpose: "composition" }))];
+      return [...p, ...assets.slice(0, remaining).map((a) => ({ assetId: a.id, url: a.url, purpose: "" }))];
     });
   };
 

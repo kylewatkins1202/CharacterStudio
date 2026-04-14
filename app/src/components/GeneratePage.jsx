@@ -1,5 +1,5 @@
 import { api } from "../lib/api";
-import { computeSize, estimateCost, extractImageUrl } from "../lib/utils";
+import { computeSize, extractImageUrl } from "../lib/utils";
 import { ASPECT_RATIOS } from "../lib/constants";
 import { PromptInput } from "./PromptInput";
 import { ReferenceImageInput } from "./ReferenceImageInput";
@@ -64,6 +64,11 @@ export function GeneratePage({
   const [wsModels, setWsModels] = useState({});
   // Per-tag descriptor overrides: { [tagKey]: { appearance?: bool, bodyShape?: bool, basic?: bool } }
   const [tagOverrides, setTagOverrides] = useState({});
+  // Nano Banana Pro resolution
+  const [nbResolution, setNbResolution] = useState("1k");
+  // Dynamic cost fetched from /generate/image/cost
+  const [generationCost, setGenerationCost] = useState(null);
+  const [costLoading, setCostLoading] = useState(false);
 
   // Tags currently referenced in the prompt via @key tokens
   const referencedTags = useMemo(() => {
@@ -81,18 +86,44 @@ export function GeneratePage({
     }).catch(() => {});
   }, []);
 
-  console.log(wsModels?.[cloudModel]?.cost)
-  let generationCost = useMemo(() => (parseFloat(wsModels?.[cloudModel]?.cost ?? '0.0')).toLocaleString('en-US', { style: 'currency', currency: 'USD' }), [wsModels, cloudModel])
-
   // Clamp baseSize to the selected model's max when cloudModel or wsModels changes
   useEffect(() => {
     const max = wsModels[cloudModel]?.max;
     if (max && baseSize > max) setBaseSize(max);
   }, [cloudModel, wsModels]);
 
+  // Fetch real-time cost from the backend (debounced 600ms)
+  useEffect(() => {
+    if (mode !== "wavespeed" || !prompt.trim()) return;
+    const isNanoBanana = wsModels[cloudModel]?.schema === "nano-banana";
+    setCostLoading(true);
+    const timer = setTimeout(async () => {
+      try {
+        const body = {
+          prompt,
+          model:     cloudModel,
+          tagLocks:  tagOverrides,
+          ...(isNanoBanana
+            ? { aspect_ratio: aspect.label, resolution: nbResolution }
+            : { size: computeSize(aspect, baseSize) }),
+        };
+        const res = await api.post("/generate/image/cost", body);
+        if (res.ok) {
+          setGenerationCost("$" + res.unitPrice);
+        } else {
+          setGenerationCost(null);
+        }
+      } catch {
+        setGenerationCost(null);
+      }
+      setCostLoading(false);
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [prompt, cloudModel, aspect, baseSize, nbResolution, tagOverrides, mode]);
+
   const computedSize = computeSize(aspect, baseSize);
-  const cost         = estimateCost(computedSize);
-  const imageUrl     = result ? extractImageUrl(result) : null;
+  const currentSchema = wsModels[cloudModel]?.schema;
+  const imageUrl      = result ? extractImageUrl(result) : null;
 
   /**
    * Generates image and shows the image and its raw prompt to the user
@@ -106,11 +137,11 @@ export function GeneratePage({
     setCompiled(null);
 
     try {
+      const isNanoBanana = currentSchema === "nano-banana";
       const body = {
         prompt,
         negPrompt: negPrompt ?? '',
         mode,
-        size: computedSize,
         ...(mode === 'local' ? {
           model:     localModel,
           steps:     localSteps,
@@ -121,6 +152,9 @@ export function GeneratePage({
           sampler:   localSampler,
         } : {
           model: cloudModel,
+          ...(isNanoBanana
+            ? { aspect_ratio: aspect.label, resolution: nbResolution }
+            : { size: computedSize }),
         }),
         // Existing assets picked from the library — resolved server-side by ID
         referenceAssetIds:  referenceImages.filter((i) => i.assetId).map((i) => ({ id: i.assetId, purpose: i.purpose })),
@@ -295,14 +329,13 @@ export function GeneratePage({
             sampler={localSampler}       onSamplerChange={setLocalSampler}
           />
         )}
-        {
-          mode === 'wavespeed' && (
-            <CloudOptions
-              model={cloudModel} onModelChange={setCloudModel}
-              models={wsModels}
-            />
-          )
-        }
+        {mode === 'wavespeed' && (
+          <CloudOptions
+            model={cloudModel} onModelChange={setCloudModel}
+            models={wsModels}
+            resolution={nbResolution} onResolutionChange={setNbResolution}
+          />
+        )}
 
         {/* Aspect ratio */}
         <div>
@@ -346,37 +379,39 @@ export function GeneratePage({
           </div>
         </div>
 
-        {/* Resolution slider */}
-        <div>
-          <label style={FL}>
-            Resolution — <span style={{ color: colors.textMuted }}>{computedSize.replace("*", " × ")}</span>
-          </label>
-          <input
-            type="range"
-            min={wsModels[cloudModel]?.min ?? 512}
-            max={wsModels[cloudModel]?.max ?? 8192}
-            step={64}
-            value={baseSize}
-            onChange={(e) => setBaseSize(Number(e.target.value))}
-            style={{ width: "100%", accentColor: colors.primary, cursor: "pointer" }}
-          />
-          <div style={{ display: "flex", justifyContent: "space-between", color: colors.borderStrong, fontFamily: font.mono, fontSize: font.sizeSm, marginTop: 4 }}>
-            {(() => {
-              const sliderMin = wsModels[cloudModel]?.min ?? 512;
-              const sliderMax = wsModels[cloudModel]?.max ?? 8192;
-              const mid = Math.round((sliderMin + sliderMax) / 2);
-              const q1  = Math.round((sliderMin + mid) / 2);
-              const q3  = Math.round((mid + sliderMax) / 2);
-              return [sliderMin, q1, mid, q3, sliderMax].map((v) => <span key={v}>{v}</span>);
-            })()}
+        {/* Resolution slider — hidden for nano-banana (uses resolution enum instead) */}
+        {currentSchema !== "nano-banana" && (
+          <div>
+            <label style={FL}>
+              Resolution — <span style={{ color: colors.textMuted }}>{computedSize.replace("*", " × ")}</span>
+            </label>
+            <input
+              type="range"
+              min={wsModels[cloudModel]?.min ?? 512}
+              max={wsModels[cloudModel]?.max ?? 8192}
+              step={64}
+              value={baseSize}
+              onChange={(e) => setBaseSize(Number(e.target.value))}
+              style={{ width: "100%", accentColor: colors.primary, cursor: "pointer" }}
+            />
+            <div style={{ display: "flex", justifyContent: "space-between", color: colors.borderStrong, fontFamily: font.mono, fontSize: font.sizeSm, marginTop: 4 }}>
+              {(() => {
+                const sliderMin = wsModels[cloudModel]?.min ?? 512;
+                const sliderMax = wsModels[cloudModel]?.max ?? 8192;
+                const mid = Math.round((sliderMin + sliderMax) / 2);
+                const q1  = Math.round((sliderMin + mid) / 2);
+                const q3  = Math.round((mid + sliderMax) / 2);
+                return [sliderMin, q1, mid, q3, sliderMax].map((v) => <span key={v}>{v}</span>);
+              })()}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Actions row */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 14 }}>
-          {cost && (
+          {mode === "wavespeed" && (
             <span style={{ fontFamily: font.mono, fontSize: font.sizeMd, color: colors.textGhost }}>
-              est. <span style={{ color: colors.textMuted }}>${cost}</span>
+              {costLoading ? "fetching cost…" : generationCost ? <>est. <span style={{ color: colors.textMuted }}>{generationCost}</span></> : null}
             </span>
           )}
           <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", userSelect: "none" }}>
@@ -407,7 +442,7 @@ export function GeneratePage({
               whiteSpace:   "nowrap",
             }}
           >
-            {starting ? "Starting…" : `Generate (${generationCost}) →`}
+            {starting ? "Starting…" : "Generate →"}
           </button>
         </div>
       </div>

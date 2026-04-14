@@ -54,6 +54,10 @@ function extractImageUrlFromResult(result) {
 }
 
 const PURPOSE_DIRECTIVES = {
+  none: {
+    singular: "",
+    plural:   "",
+  },
   composition: {
     singular: "Use image[{n}] as a reference for the overall composition, framing, and subject placement.",
     plural:   "Use image[{n}] as a reference for the overall composition, framing, and placement of all subjects.",
@@ -80,7 +84,83 @@ const PURPOSE_DIRECTIVES = {
   },
 };
 
-// ─── Route ───────────────────────────────────────────────────────────────────
+// ─── Cost estimation route ────────────────────────────────────────────────────
+
+/**
+ * POST /generate/image/cost
+ *
+ * Returns the estimated cost for a generation without actually generating.
+ * Compiles tags (or uses cache) to determine the number of images, then calls
+ * the WaveSpeed pricing endpoint. Falls back to the static model cost on error.
+ */
+router.post("/image/cost", async (req, res) => {
+  try {
+    const prompt    = String(req.body.prompt || "");
+    const model     = req.body.model || "seedream";
+    const tagLocks  = req.body.tagLocks || {};
+    const size      = req.body.size;
+    const aspectRatio = req.body.aspect_ratio;
+    const resolution  = req.body.resolution || "1k";
+
+    const modelDef = wavespeed.MODELS[model];
+    if (!modelDef) return res.status(400).json({ error: `Unknown model: ${model}` });
+
+    // Compile tags (or use cache) to discover how many images will be sent
+    let imageUrls = [];
+    let cached = false;
+
+    if (prompt) {
+      const tagKeys = extractTags(prompt);
+      const tagList = tagKeys.length ? await healTagAssets(await db.tags.getTags(tagKeys)) : [];
+      if (tagList.length > 0) {
+        const cacheKey = db.cache.makeCacheKey(prompt, tagLocks, tagList);
+        const hit = await db.cache.getCached(cacheKey);
+        if (hit) {
+          imageUrls = hit.images || [];
+          cached = true;
+        } else {
+          const compiled = await compilePrompt({
+            prompt, tags: tagList, tagLocks,
+            parserOptions: { model: LLM_MODEL },
+            visionOptions: { enable: false, force: false, model: VISION_MODEL },
+          });
+          imageUrls = compiled.images || [];
+        }
+      }
+    }
+
+    // Determine which modelId to price (edit if images present, text-to-image otherwise)
+    const useEdit = imageUrls.length > 0;
+    const modelId = useEdit ? (modelDef.editModelId || modelDef.modelId) : modelDef.modelId;
+
+    // Build inputs for the pricing call
+    const inputs = { prompt };
+    if (useEdit) inputs.images = imageUrls;
+    if (modelDef.schema === "nano-banana") {
+      if (aspectRatio) inputs.aspect_ratio = aspectRatio;
+      inputs.resolution = resolution;
+    } else {
+      if (size) inputs.size = size;
+    }
+
+    let unitPrice, currency;
+    try {
+      const pricing = await wavespeed.getModelPricing(modelId, inputs);
+      unitPrice = pricing.unitPrice;
+      currency  = pricing.currency;
+    } catch {
+      // Pricing API unavailable — fall back to static cost
+      unitPrice = parseFloat(modelDef.cost);
+      currency  = "USD";
+    }
+
+    res.json({ ok: true, unitPrice, currency, cached });
+  } catch (error) {
+    res.status(500).json({ error: "cost estimation failed", details: error.message });
+  }
+});
+
+// ─── Generate route ───────────────────────────────────────────────────────────
 
 router.post("/image", async (req, res) => {
   try {
@@ -93,6 +173,8 @@ router.post("/image", async (req, res) => {
     const resetCache         = req.body.resetCache === true;
     const mode               = req.body.mode
     const model              = req.body.model
+    const resolution         = req.body.resolution || "1k"
+    const aspectRatio        = req.body.aspect_ratio || null
     const loras              = req.body.loras
     const steps              = req.body.steps
     const cfg                = req.body.cfg
@@ -255,14 +337,26 @@ router.post("/image", async (req, res) => {
         let result, imageUrl;
 
         if (mode === "wavespeed") {
-          result = await wavespeed.generateSeedreamEdit({
-            model,
-            images:             compiled.images,
-            prompt:             compiled.rawPrompt,
-            size,
-            enableSyncMode: false,
-            enableBase64Output
-          });
+          const modelDef = wavespeed.MODELS[model];
+          if (modelDef?.schema === "nano-banana") {
+            result = await wavespeed.generateNanaBanana({
+              images:             compiled.images,
+              prompt:             compiled.rawPrompt,
+              aspect_ratio:       aspectRatio,
+              resolution,
+              enableSyncMode:     false,
+              enableBase64Output,
+            });
+          } else {
+            result = await wavespeed.generateSeedreamEdit({
+              model,
+              images:             compiled.images,
+              prompt:             compiled.rawPrompt,
+              size,
+              enableSyncMode:     false,
+              enableBase64Output,
+            });
+          }
 
           if (result.data?.status === "failed") {
             throw new Error(`WaveSpeed generation failed: ${result.data?.error || "unknown error"}`);
