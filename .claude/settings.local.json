@@ -3,7 +3,11 @@
     "allow": [
       "Bash(taskkill /F /IM \"Ares.exe\" /T)",
       "Bash(taskkill /F /IM \"electron.exe\" /T)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(npm install:*)",
+      "Bash(npx expo:*)",
+      "Bash(node -e ':*)",
+      "Bash(node -e \"const d = require\\('./node_modules/@react-navigation/native-stack/package.json'\\); console.log\\(JSON.stringify\\(d.peerDependencies, null, 2\\)\\)\")"
     ]
   }
 }

@@ -69,10 +69,13 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@expo/ngrok": "^4.1.0",
+    "@expo/ngrok-bin-win32-x64": "^2.3.40",
     "axios": "^1.13.6",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "eslint": "^10.0.3",
+    "expo-media-library": "^55.0.14",
     "express": "^5.2.1",
     "form-data": "^4.0.5",
     "sharp": "^0.34.5",
