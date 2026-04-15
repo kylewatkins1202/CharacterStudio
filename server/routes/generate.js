@@ -54,6 +54,10 @@ function extractImageUrlFromResult(result) {
 }
 
 const PURPOSE_DIRECTIVES = {
+  none: {
+    singular: "",
+    plural:   "",
+  },
   composition: {
     singular: "Use image[{n}] as a reference for the overall composition, framing, and subject placement.",
     plural:   "Use image[{n}] as a reference for the overall composition, framing, and placement of all subjects.",
@@ -80,19 +84,91 @@ const PURPOSE_DIRECTIVES = {
   },
 };
 
-// ─── Route ───────────────────────────────────────────────────────────────────
+// ─── Cost estimation route ────────────────────────────────────────────────────
 
-router.post("/generate", async (req, res) => {
+/**
+ * POST /generate/image/cost
+ *
+ * Returns the estimated cost for a generation without actually generating.
+ * Compiles tags (or uses cache) to determine the number of images, then calls
+ * the WaveSpeed pricing endpoint. Falls back to the static model cost on error.
+ */
+router.post("/image/cost", async (req, res) => {
+  try {
+    const prompt    = String(req.body.prompt || "");
+    const model     = req.body.model || "seedream";
+    const tagLocks  = req.body.tagLocks || {};
+    const size      = req.body.modelParams?.size;
+    const aspectRatio = req.body.modelParams?.aspect_ratio;
+    const resolution  = req.body.modelParams?.resolution || "1k";
+
+    const modelDef = wavespeed.MODELS[model];
+    if (!modelDef) return res.status(400).json({ error: `Unknown model: ${model}` });
+
+    // Compile tags (or use cache) to discover how many images will be sent
+    let imageUrls = [];
+    let cached = false;
+    if (prompt) {
+      const tagKeys = extractTags(prompt);
+      const tagList = tagKeys.length ? await healTagAssets(await db.tags.getTags(tagKeys)) : [];
+      if (tagList.length > 0) {
+        const cacheKey = db.cache.makeCacheKey(prompt, tagLocks, tagList);
+        const hit = await db.cache.getCached(cacheKey);
+        if (hit) {
+          imageUrls = hit.images || [];
+          cached = true;
+        }
+      }
+    }
+
+    // Determine which modelId to price (edit if images present, text-to-image otherwise)
+    const useEdit = imageUrls.length > 0;
+    const modelId = useEdit ? (modelDef.editModelId || modelDef.modelId) : modelDef.modelId;
+
+    // Build inputs for the pricing call
+    const inputs = { prompt };
+    if (useEdit) inputs.images = imageUrls;
+    const schemas = wavespeed.getModelSchemas();
+    if (schemas?.[model]?.aspectRatios) {
+      if (aspectRatio) inputs.aspect_ratio = aspectRatio;
+      inputs.resolution = resolution;
+    } else {
+      if (size) inputs.size = size;
+    }
+
+    let unitPrice, currency;
+    try {
+      const pricing = await wavespeed.getModelPricing(modelId, inputs);
+      unitPrice = pricing.unitPrice;
+      currency  = pricing.currency;
+    } catch {
+      // Pricing API unavailable — fall back to static cost
+      unitPrice = parseFloat(modelDef.cost) + (cached ? 0 : 0.001);
+      currency  = "USD";
+    }
+
+    res.json({ ok: true, unitPrice, currency, cached });
+  } catch (error) {
+    res.status(500).json({ error: "cost estimation failed", details: error.message });
+  }
+});
+
+// ─── Generate route ───────────────────────────────────────────────────────────
+
+router.post("/image", async (req, res) => {
   try {
     const prompt             = String(req.body.prompt || "");
     const negPrompt          = String(req.body.negPrompt || "");
-    const size               = req.body.size;
     const tagLocks           = req.body.tagLocks || {};
     const enableSyncMode     = req.body.enable_sync_mode !== false;
     const enableBase64Output = req.body.enable_base64_output === true;
     const resetCache         = req.body.resetCache === true;
     const mode               = req.body.mode
     const model              = req.body.model
+    const size               = req.body.modelParams?.size;
+    const resolution         = req.body.modelParams?.resolution || "1k"
+    const aspectRatio        = req.body.modelParams?.aspect_ratio || null
+    const modelParams        = req.body.modelParams || {}
     const loras              = req.body.loras
     const steps              = req.body.steps
     const cfg                = req.body.cfg
@@ -237,6 +313,7 @@ router.post("/generate", async (req, res) => {
       size:             size || null,
       mode,
       model,
+      modelParams,
       negPrompt,
       timestamp:        new Date().toISOString(),
     };
@@ -259,9 +336,12 @@ router.post("/generate", async (req, res) => {
             model,
             images:             compiled.images,
             prompt:             compiled.rawPrompt,
-            size,
-            enableSyncMode: false,
-            enableBase64Output
+            size:              modelParams?.size ?? size,
+            aspect_ratio:       modelParams?.aspectRatio ?? aspectRatio,
+            resolution:      modelParams?.resolution ?? resolution,
+            extraParams:        modelParams,
+            enableSyncMode:     false,
+            enableBase64Output,
           });
 
           if (result.data?.status === "failed") {
@@ -333,7 +413,12 @@ router.post("/generate", async (req, res) => {
 
         if (updated) {
           const populated = await populateEntry(updated);
-          emitter.emit("gallery:update", populated);
+          // Include the known CDN URL as a fallback in case the asset hasn't
+          // been written to the DB cache yet when populateEntry runs.
+          emitter.emit("gallery:update", {
+            ...populated,
+            imageUrl: populated.imageUrl || imageUrl,
+          });
         }
 
       } catch (bgErr) {

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { api } from "./lib/api";
-import { makeSyntheticResult } from "./lib/utils";
+import { makeSyntheticResult, sizeToRatio } from "./lib/utils";
 import { ASPECT_RATIOS } from "./lib/constants";
 import { globalCss, getThemeCss, colors, font } from "./theme";
 import { useToast, Toast } from "./components/Toast";
@@ -64,7 +64,13 @@ export default function App() {
   // Raw negative prompt typed by user
   const [negPrompt, setNegPrompt] = useState("")
   // Cloud Model
-  const [cloudModel, setCloudModel] = useState("seedream")
+  const [cloudModel,       setCloudModel]       = useState("seedream")
+  // Extra model-specific params (seed, output_format, resolution, etc.) — reset on model change
+  const [cloudModelParams, setCloudModelParams] = useState({
+    aspect_ratio: ASPECT_RATIOS[0],
+    baseSize: 2048,
+    resolution: "1k",
+  })
   // Local (ComfyUI) generation options — defaults match buildDynamicWorkflow
   const [localModel,   setLocalModel]   = useState("DarkBeast")
   const [localSteps,   setLocalSteps]   = useState(4)
@@ -144,6 +150,7 @@ export default function App() {
     // A generation completed or failed — update the matching entry in-place
     es.addEventListener("gallery:update", (e) => {
       const updated = JSON.parse(e.data);
+      console.log("SSE update:", updated);
       setSseEntries((prev) => {
         if (!prev) return null; // gallery not yet loaded; let GalleryPage fetch fresh
         return prev.map((en) => (en.id === updated.id ? updated : en));
@@ -218,8 +225,31 @@ export default function App() {
       setLocalSampler(entry.sampler || "euler")
     }
     else {
+      let size = entry?.modelParams?.size ?? entry?.size
+      let aspect_ratio = entry?.modelParams?.aspect_ratio
+      let resolution = entry?.modelParams?.resolution
+      let baseSize 
+      
+      // Restore aspect ratio and base size from the recorded size string (e.g. "1024*1024")
+      if (size) {
+        // Split "W*H" into numeric width and height
+        const [w, h] = size.split("*").map(Number);
+        aspect_ratio = sizeToRatio(size);
+        baseSize = Math.max(w, h)
+      } else {
+        let ratioSplit = aspect_ratio.split(":").map(Number)
+        aspect_ratio = ASPECT_RATIOS.find((r) => r.w === ratioSplit[0] && r.h === ratioSplit[1])
+      }
+
+      let modelParams = {
+        ...entry.modelParams || {},
+        baseSize: baseSize,
+        resolution: resolution,
+        aspect_ratio: aspect_ratio
+      }
       setMode('wavespeed')
       setCloudModel(entry.model || "seedream")
+      setCloudModelParams(modelParams || {})
     }
     
     // Restore the original user prompt
@@ -396,7 +426,8 @@ export default function App() {
           referenceImages={referenceImages}
           setReferenceImages={setReferenceImages}
           maxReferenceImages={maxReferenceImages}
-          cloudModel={cloudModel}   setCloudModel={setCloudModel}
+          cloudModel={cloudModel}           setCloudModel={setCloudModel}
+          cloudModelParams={cloudModelParams} setCloudModelParams={setCloudModelParams}
           localModel={localModel}     setLocalModel={setLocalModel}
           localSteps={localSteps}     setLocalSteps={setLocalSteps}
           localCfg={localCfg}         setLocalCfg={setLocalCfg}

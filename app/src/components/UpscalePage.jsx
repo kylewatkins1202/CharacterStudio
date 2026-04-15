@@ -16,7 +16,7 @@ export function UpscalePage({ toast, images, onImagesChange }) {
     setResult(null);
     try {
       const img = images[0];
-      const res = await api.post("/image/upscale", {
+      const res = await api.post("/generate/upscale", {
         image: img,
         targetResolution: resolution,
       });
@@ -50,7 +50,7 @@ export function UpscalePage({ toast, images, onImagesChange }) {
             Source Image{" "}
             <span style={{ color: colors.borderStrong, fontWeight: 400 }}>— select one image to upscale</span>
           </label>
-          <ReferenceImageInput images={images} onChange={onImagesChange} maxImages={1} />
+          <ReferenceImageInput images={images} onChange={onImagesChange} maxImages={1} noPurpose={true} />
         </div>
 
         {/* Resolution */}

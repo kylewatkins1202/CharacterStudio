@@ -1,5 +1,5 @@
 import { api } from "../lib/api";
-import { computeSize, estimateCost, extractImageUrl } from "../lib/utils";
+import { computeSize, extractImageUrl } from "../lib/utils";
 import { ASPECT_RATIOS } from "../lib/constants";
 import { PromptInput } from "./PromptInput";
 import { ReferenceImageInput } from "./ReferenceImageInput";
@@ -58,10 +58,26 @@ export function GeneratePage({
   negPrompt, setNegPrompt,
   localGenerationEnabled,
   onGenerated,
+  cloudModelParams, setCloudModelParams,
 }) {
   // True only while the server is acknowledging the generate request (brief)
   const [starting, setStarting] = useState(false);
   const [wsModels, setWsModels] = useState({});
+  // Per-tag descriptor overrides: { [tagKey]: { appearance?: bool, bodyShape?: bool, basic?: bool } }
+  const [tagOverrides, setTagOverrides] = useState({});
+  // Dynamic cost fetched from /generate/image/cost
+  const [generationCost, setGenerationCost] = useState(null);
+  const [costLoading, setCostLoading] = useState(false);
+
+  // Tags currently referenced in the prompt via @key tokens
+  const referencedTags = useMemo(() => {
+    const hits = new Set([...prompt.matchAll(/@(\S+)/g)].map((m) => m[1]));
+    return tags.filter((t) => hits.has(t.key));
+  }, [prompt, tags]);
+
+  const getOverride = (key, field) => tagOverrides[key]?.[field] ?? true;
+  const setOverride = (key, field, value) =>
+    setTagOverrides((prev) => ({ ...prev, [key]: { ...(prev[key] || {}), [field]: value } }));
   
   useEffect(() => {
     api.get("/models/wavespeed/options").then((res) => {
@@ -69,17 +85,52 @@ export function GeneratePage({
     }).catch(() => {});
   }, []);
 
-  console.log(wsModels?.[cloudModel]?.cost)
-  let generationCost = useMemo(() => (parseFloat(wsModels?.[cloudModel]?.cost ?? '0.0')).toLocaleString('en-US', { style: 'currency', currency: 'USD' }), [wsModels, cloudModel])
-
   // Clamp baseSize to the selected model's max when cloudModel or wsModels changes
   useEffect(() => {
     const max = wsModels[cloudModel]?.max;
     if (max && baseSize > max) setBaseSize(max);
   }, [cloudModel, wsModels]);
 
-  const computedSize = computeSize(aspect, baseSize);
-  const cost         = estimateCost(computedSize);
+  
+
+  // Fetch real-time cost from the backend (debounced 600ms)
+  useEffect(() => {
+    if (mode !== "wavespeed" || !prompt.trim()) return;
+    setCostLoading(true);
+
+    const usesEnumSize = (wsModels[cloudModel]?.resolution && wsModels[cloudModel]?.aspectRatios);
+    
+    const timer = setTimeout(async () => {
+      try {
+        const body = {
+          prompt,
+          model:       cloudModel,
+          tagLocks:    tagOverrides,
+          modelParams: {
+            ...cloudModelParams,
+            ...(usesEnumSize
+              ? { aspect_ratio: aspect.label, resolution: cloudModelParams.resolution || "1k" }
+              : { size: computeSize(aspect, baseSize) })
+          },
+        };
+
+        delete body.modelParams.baseSize
+
+        const res = await api.post("/generate/image/cost", body);
+        if (res.ok) {
+          setGenerationCost("$" + res.unitPrice);
+        } else {
+          setGenerationCost(null);
+        }
+      } catch {
+        setGenerationCost(null);
+      }
+      setCostLoading(false);
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [prompt, cloudModel, aspect, baseSize, cloudModelParams, tagOverrides, mode]);
+
+
   const imageUrl     = result ? extractImageUrl(result) : null;
 
   /**
@@ -92,13 +143,13 @@ export function GeneratePage({
     setStarting(true);
     setResult(null);
     setCompiled(null);
-
+    const usesEnumSize = (wsModels[cloudModel]?.resolution && wsModels[cloudModel]?.aspectRatios);
+    const computedSize = computeSize(cloudModelParams.aspect_ratio, cloudModelParams.baseSize);
     try {
       const body = {
         prompt,
         negPrompt: negPrompt ?? '',
         mode,
-        size: computedSize,
         ...(mode === 'local' ? {
           model:     localModel,
           steps:     localSteps,
@@ -108,7 +159,13 @@ export function GeneratePage({
           scheduler: localScheduler,
           sampler:   localSampler,
         } : {
-          model: cloudModel,
+          model:       cloudModel,
+          modelParams: {
+            ...cloudModelParams,
+            ...(usesEnumSize
+            ? { aspect_ratio: aspect.label, resolution: cloudModelParams.resolution || "1k" }
+            : { size: computedSize }),
+          },
         }),
         // Existing assets picked from the library — resolved server-side by ID
         referenceAssetIds:  referenceImages.filter((i) => i.assetId).map((i) => ({ id: i.assetId, purpose: i.purpose })),
@@ -116,10 +173,11 @@ export function GeneratePage({
         referenceImages:    referenceImages.filter((i) => !i.assetId && !i.isUrl).map((i) => ({ data: i.src, purpose: i.purpose })),
         // Pasted URLs — healed if a matching asset exists, used as-is otherwise
         referenceImageUrls: referenceImages.filter((i) => i.isUrl).map((i) => ({ url: i.url || i.src, purpose: i.purpose })),
+        tagLocks: tagOverrides,
         resetCache,
       };
 
-      const res = await api.post("/image/generate", body);
+      const res = await api.post("/generate/image", body);
 
       if (res.ok) {
         toast.add("Generation started!", "success");
@@ -194,6 +252,71 @@ export function GeneratePage({
           mode === 'local' &&
             <PromptInput value={negPrompt} onChange={setNegPrompt} placeholder={"Negative prompt…"}></PromptInput>
         }
+
+        {/* Per-tag descriptor toggles */}
+        {mode === 'wavespeed' && referencedTags.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {referencedTags.map((tag) => {
+              const isChar   = tag.type === "character";
+              const hasAppear = isChar && !!tag.lock?.appearanceDescription;
+              const hasBody   = isChar && !!tag.lock?.bodyDescription;
+              const hasBasic  = !isChar && !!tag.lock?.basicDescription;
+              const hasAny    = hasAppear || hasBody || hasBasic;
+
+              // Available fields for the "All" checkbox
+              const allOn = (
+                (!hasAppear || getOverride(tag.key, "appearance")) &&
+                (!hasBody   || getOverride(tag.key, "bodyShape")) &&
+                (!hasBasic  || getOverride(tag.key, "basic"))
+              );
+              const toggleAll = (value) => {
+                setTagOverrides((prev) => ({
+                  ...prev,
+                  [tag.key]: {
+                    ...(hasAppear ? { appearance: value } : {}),
+                    ...(hasBody   ? { bodyShape:  value } : {}),
+                    ...(hasBasic  ? { basic:       value } : {}),
+                  },
+                }));
+              };
+
+              return (
+                <div key={tag.key} style={{ display: "flex", alignItems: "center", gap: 12, background: colors.surface, border: `1px solid ${colors.borderMid}`, borderRadius: radius.md, padding: "8px 12px" }}>
+                  <span style={{ fontFamily: font.mono, fontSize: font.sizeMd, color: colors.textMid, flexShrink: 0 }}>@{tag.key}</span>
+                  {!hasAny ? (
+                    <span style={{ fontFamily: font.mono, fontSize: font.sizeSm, color: colors.borderStrong }}>no descriptions</span>
+                  ) : (
+                    <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
+                      {/* All toggle */}
+                      <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", userSelect: "none" }}>
+                        <input type="checkbox" checked={allOn} onChange={(e) => toggleAll(e.target.checked)} style={{ accentColor: colors.primary, cursor: "pointer" }} />
+                        <span style={{ fontFamily: font.mono, fontSize: font.sizeSm, color: colors.textMuted }}>All</span>
+                      </label>
+                      {hasAppear && (
+                        <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", userSelect: "none" }}>
+                          <input type="checkbox" checked={getOverride(tag.key, "appearance")} onChange={(e) => setOverride(tag.key, "appearance", e.target.checked)} style={{ accentColor: colors.primary, cursor: "pointer" }} />
+                          <span style={{ fontFamily: font.mono, fontSize: font.sizeSm, color: colors.textMuted }}>Appearance</span>
+                        </label>
+                      )}
+                      {hasBody && (
+                        <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", userSelect: "none" }}>
+                          <input type="checkbox" checked={getOverride(tag.key, "bodyShape")} onChange={(e) => setOverride(tag.key, "bodyShape", e.target.checked)} style={{ accentColor: colors.primary, cursor: "pointer" }} />
+                          <span style={{ fontFamily: font.mono, fontSize: font.sizeSm, color: colors.textMuted }}>Body shape</span>
+                        </label>
+                      )}
+                      {hasBasic && (
+                        <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", userSelect: "none" }}>
+                          <input type="checkbox" checked={getOverride(tag.key, "basic")} onChange={(e) => setOverride(tag.key, "basic", e.target.checked)} style={{ accentColor: colors.primary, cursor: "pointer" }} />
+                          <span style={{ fontFamily: font.mono, fontSize: font.sizeSm, color: colors.textMuted }}>Description</span>
+                        </label>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
         {/* Reference images */}
         <div>
           <label style={FL}>
@@ -217,88 +340,19 @@ export function GeneratePage({
             sampler={localSampler}       onSamplerChange={setLocalSampler}
           />
         )}
-        {
-          mode === 'wavespeed' && (
-            <CloudOptions
-              model={cloudModel} onModelChange={setCloudModel}
-              models={wsModels}
-            />
-          )
-        }
-
-        {/* Aspect ratio */}
-        <div>
-          <label style={FL}>Aspect Ratio</label>
-          <div style={{ display: "flex", gap: 6 }}>
-            {ASPECT_RATIOS.map((r) => {
-              const active   = aspect.label === r.label;
-              const maxDim   = 14;
-              const svgW     = r.w >= r.h ? maxDim : Math.round(maxDim * r.w / r.h);
-              const svgH     = r.h >= r.w ? maxDim : Math.round(maxDim * r.h / r.w);
-              return (
-                <button
-                  key={r.label}
-                  onClick={() => setAspect(r)}
-                  style={{
-                    padding:        "6px 14px",
-                    borderRadius:   radius.md - 1,
-                    border:         `1px solid ${active ? colors.primary : "#1e1e1e"}`,
-                    background:     active ? colors.primary : "transparent",
-                    color:          active ? colors.primaryText : colors.textMuted,
-                    fontFamily:     font.mono,
-                    fontSize:       font.sizeMd,
-                    cursor:         "pointer",
-                    transition:     "all 0.15s",
-                    display:        "flex",
-                    alignItems:     "center",
-                    gap:            7,
-                  }}
-                >
-                  <svg width={svgW} height={svgH} viewBox={`0 0 ${svgW} ${svgH}`} style={{ flexShrink: 0 }}>
-                    <rect x={0.5} y={0.5} width={svgW - 1} height={svgH - 1} rx={1}
-                      fill="none"
-                      stroke={active ? colors.primaryText : colors.textMuted}
-                      strokeWidth={1.5}
-                    />
-                  </svg>
-                  {r.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Resolution slider */}
-        <div>
-          <label style={FL}>
-            Resolution — <span style={{ color: colors.textMuted }}>{computedSize.replace("*", " × ")}</span>
-          </label>
-          <input
-            type="range"
-            min={wsModels[cloudModel]?.min ?? 512}
-            max={wsModels[cloudModel]?.max ?? 8192}
-            step={64}
-            value={baseSize}
-            onChange={(e) => setBaseSize(Number(e.target.value))}
-            style={{ width: "100%", accentColor: colors.primary, cursor: "pointer" }}
+        {mode === 'wavespeed' && (
+          <CloudOptions
+            model={cloudModel}           onModelChange={setCloudModel}
+            models={wsModels}
+            modelParams={cloudModelParams} onModelParamsChange={setCloudModelParams}
           />
-          <div style={{ display: "flex", justifyContent: "space-between", color: colors.borderStrong, fontFamily: font.mono, fontSize: font.sizeSm, marginTop: 4 }}>
-            {(() => {
-              const sliderMin = wsModels[cloudModel]?.min ?? 512;
-              const sliderMax = wsModels[cloudModel]?.max ?? 8192;
-              const mid = Math.round((sliderMin + sliderMax) / 2);
-              const q1  = Math.round((sliderMin + mid) / 2);
-              const q3  = Math.round((mid + sliderMax) / 2);
-              return [sliderMin, q1, mid, q3, sliderMax].map((v) => <span key={v}>{v}</span>);
-            })()}
-          </div>
-        </div>
+        )}
 
         {/* Actions row */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 14 }}>
-          {cost && (
+          {mode === "wavespeed" && (
             <span style={{ fontFamily: font.mono, fontSize: font.sizeMd, color: colors.textGhost }}>
-              est. <span style={{ color: colors.textMuted }}>${cost}</span>
+              {costLoading ? "fetching cost…" : generationCost ? <>est. <span style={{ color: colors.textMuted }}>{generationCost}</span></> : null}
             </span>
           )}
           <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", userSelect: "none" }}>
@@ -329,7 +383,7 @@ export function GeneratePage({
               whiteSpace:   "nowrap",
             }}
           >
-            {starting ? "Starting…" : `Generate (${generationCost}) →`}
+            {starting ? "Starting…" : "Generate →"}
           </button>
         </div>
       </div>

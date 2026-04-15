@@ -3,6 +3,7 @@ import { api } from "../lib/api";
 import { TagPill } from "./TagPill";
 import { ImageUploadGrid } from "./ImageUploadGrid";
 import { AssetPickerModal } from "./AssetPickerModal";
+import { TagFormModal } from "./TagFormModal";
 import { colors, font, radius, fieldLabel as FL } from "../theme";
 
 /**
@@ -22,6 +23,8 @@ export function TagDetail({ tag, onClose, onUpdated, onDeleted, toast }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   // Local hidden state — starts from the tag prop
   const [hidden, setHidden] = useState(Boolean(tag.hidden));
+  // Whether the edit (TagFormModal) is open
+  const [editing, setEditing] = useState(false);
 
   const handleToggleHidden = useCallback(async () => {
     const next = !hidden;
@@ -155,6 +158,12 @@ export function TagDetail({ tag, onClose, onUpdated, onDeleted, toast }) {
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <button
+              onClick={() => setEditing(true)}
+              style={{ padding: "6px 14px", background: "none", border: `1px solid ${colors.borderStrong}`, borderRadius: radius.md - 2, color: colors.textMuted, fontFamily: font.mono, fontSize: font.sizeMd, cursor: "pointer", transition: "all 0.15s" }}
+            >
+              Edit
+            </button>
+            <button
               onClick={handleToggleHidden}
               style={{ padding: "6px 14px", background: hidden ? colors.borderMid : "none", border: `1px solid ${colors.borderStrong}`, borderRadius: radius.md - 2, color: colors.textMuted, fontFamily: font.mono, fontSize: font.sizeMd, cursor: "pointer", transition: "all 0.15s" }}
             >
@@ -268,6 +277,15 @@ export function TagDetail({ tag, onClose, onUpdated, onDeleted, toast }) {
           Created {tag.meta?.createdAt ? new Date(tag.meta.createdAt).toLocaleDateString() : "—"} · Updated {tag.meta?.updatedAt ? new Date(tag.meta.updatedAt).toLocaleDateString() : "—"}
         </div>
       </div>
+
+      {editing && (
+        <TagFormModal
+          existingTag={tag}
+          onClose={() => setEditing(false)}
+          onSave={(updated) => { onUpdated(updated); setEditing(false); }}
+          toast={toast}
+        />
+      )}
 
       {/* Confirm delete dialog */}
       {confirmDelete && (

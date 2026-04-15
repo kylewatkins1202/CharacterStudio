@@ -4,6 +4,8 @@
  * Pure utility functions with no React dependencies.
  */
 
+import { ASPECT_RATIOS } from "./constants";
+
 /**
  * Extract the final image URL from a WaveSpeed generation response.
  * Tries several known response shapes and returns the first non-null value.
@@ -41,7 +43,7 @@ export function makeSyntheticResult(imageUrl) {
  * @param {number} baseSize - Long-edge size in pixels.
  * @returns {string} e.g. "2048*1536"
  */
-export function computeSize(aspect, baseSize) {
+export function computeSize(aspect = { w: 1, h: 1 }, baseSize) {
   const ratio = aspect.w / aspect.h;
   let w, h;
   if (ratio >= 1) {
@@ -52,6 +54,24 @@ export function computeSize(aspect, baseSize) {
     w = Math.round((baseSize * ratio) / 64) * 64;
   }
   return `${w}*${h}`;
+}
+
+export const sizeToRatio = (size) => {
+  const [w, h] = size.split('*').map(Number);
+  const actualRatio = w / h;
+
+  let bestMatch = null;
+  let smallestDiff = Infinity;
+
+  for (const ratio of ASPECT_RATIOS) {
+    const diff = Math.abs(actualRatio - ratio.w / ratio.h);
+    if (diff < smallestDiff) {
+      smallestDiff = diff;
+      bestMatch = ratio;
+    }
+  }
+
+  return bestMatch;
 }
 
 /**

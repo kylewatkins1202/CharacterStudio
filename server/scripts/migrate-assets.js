@@ -117,7 +117,7 @@ async function main() {
           assetPath: assetPath || null,
           filename:  asset.filename,
           mimeType:  asset.mimeType,
-          purpose:   asset.purpose || "composition",
+          purpose:   asset.purpose || "",
           hidden:    asset.hidden  || false,
           timestamp: asset.timestamp || new Date().toISOString(),
         };

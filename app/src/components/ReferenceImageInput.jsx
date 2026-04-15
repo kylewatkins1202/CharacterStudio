@@ -98,9 +98,10 @@ function UrlReferenceInput({ onAdd }) {
  * @param {{
  *   images: Array<{ src: string, isUrl: boolean, purpose: string }>,
  *   onChange: (updater: Function) => void
+ *   noPurpose?: boolean - if true, hides the purpose selector UI and doesn't set purpose on images
  * }} props
  */
-export function ReferenceImageInput({ images, onChange, maxImages }) {
+export function ReferenceImageInput({ images, onChange, maxImages, noPurpose = false}) {
   const inputRef      = useRef();
   const [dragging,    setDragging]    = useState(false);
   const [showPicker,  setShowPicker]  = useState(false);
@@ -130,7 +131,7 @@ export function ReferenceImageInput({ images, onChange, maxImages }) {
     const srcs = await Promise.all(Array.from(fileList).map(toBase64));
     onChange((p) => {
       const remaining = maxImages != null ? Math.max(0, maxImages - p.length) : srcs.length;
-      return [...p, ...srcs.slice(0, remaining).map((src) => ({ src, isUrl: false, purpose: "composition" }))];
+      return [...p, ...srcs.slice(0, remaining).map((src) => ({ src, isUrl: false, purpose: "" }))];
     });
   };
 
@@ -156,7 +157,7 @@ export function ReferenceImageInput({ images, onChange, maxImages }) {
   const handlePickAssets = (assets) => {
     onChange((p) => {
       const remaining = maxImages != null ? Math.max(0, maxImages - p.length) : assets.length;
-      return [...p, ...assets.slice(0, remaining).map((a) => ({ assetId: a.id, url: a.url, purpose: "composition" }))];
+      return [...p, ...assets.slice(0, remaining).map((a) => ({ assetId: a.id, url: a.url, purpose: "" }))];
     });
   };
 
@@ -209,7 +210,7 @@ export function ReferenceImageInput({ images, onChange, maxImages }) {
 
       {!atLimit && (
         <UrlReferenceInput
-          onAdd={(url) => onChange((p) => [...p, { url, isUrl: true, purpose: "composition" }])}
+          onAdd={(url) => onChange((p) => [...p, { url, isUrl: true, purpose: "" }])}
         />
       )}
 
@@ -289,7 +290,7 @@ export function ReferenceImageInput({ images, onChange, maxImages }) {
               </div>
 
               {/* Purpose selector */}
-              <div style={{ flex: 1 }}>
+              <div style={{ flex: 1, ...(noPurpose && { visibility: "hidden" }) }}>
                 <div style={{
                   color:         colors.textGhost,
                   fontFamily:    font.mono,

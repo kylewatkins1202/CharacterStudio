@@ -20,6 +20,7 @@ const express = require("express");
 const db      = require("../db");
 const { healAsset, saveAssetLocally } = require("../utils/assets");
 const path = require('path')
+const fsp  = require('fs/promises');
 
 const router = express.Router();
 
