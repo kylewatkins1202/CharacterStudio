@@ -139,7 +139,7 @@ router.post("/image/cost", async (req, res) => {
     let unitPrice, currency;
     try {
       const pricing = await wavespeed.getModelPricing(modelId, inputs);
-      unitPrice = pricing.unitPrice;
+      unitPrice = pricing.unitPrice + (cached ? 0 : 0.001);
       currency  = pricing.currency;
     } catch {
       // Pricing API unavailable — fall back to static cost

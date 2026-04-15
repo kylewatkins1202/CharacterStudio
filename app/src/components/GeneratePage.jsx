@@ -146,6 +146,7 @@ export function GeneratePage({
     const usesEnumSize = (wsModels[cloudModel]?.resolution && wsModels[cloudModel]?.aspectRatios);
     const computedSize = computeSize(cloudModelParams.aspect_ratio, cloudModelParams.baseSize);
     try {
+      const isNanoBanana = currentSchema === "nano-banana";
       const body = {
         prompt,
         negPrompt: negPrompt ?? '',

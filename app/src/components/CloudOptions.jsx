@@ -80,6 +80,8 @@ function DynamicField({ fieldKey, schema, value, onChange }) {
 // Cache last values for each model to restore on model switch (for fields that aren't preserved in modelParams, like baseSize for enum-size models)
 const lastValue = {}
 
+const RESOLUTIONS = ["1k", "2k", "4k"];
+
 /**
  * CloudOptions — model selector for WaveSpeed cloud generation.
  *

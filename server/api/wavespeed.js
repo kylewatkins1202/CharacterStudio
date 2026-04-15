@@ -363,6 +363,62 @@ async function generateSeedreamEdit({
 }
 
 /**
+ * Generate an image with Nano Banana Pro (text-to-image or edit).
+ *
+ * Uses the text-to-image endpoint when no images are provided,
+ * and the edit endpoint when images are present — same pattern as generateSeedreamEdit.
+ *
+ * @param {{ images: string[], prompt: string, aspect_ratio?: string, resolution?: string, enableSyncMode?: boolean, enableBase64Output?: boolean }} options
+ * @returns {Promise<unknown>} Raw WaveSpeed API response body.
+ */
+async function generateNanaBanana({
+    images = [],
+    prompt,
+    aspect_ratio,
+    resolution = "1k",
+    enableSyncMode = false,
+    enableBase64Output = false,
+}) {
+    const modelDef = MODELS["nano-banana-pro"];
+    const isEdit   = images.length > 0;
+    const link     = isEdit ? modelDef.editLink : modelDef.link;
+
+    const payload = {
+        prompt,
+        enable_sync_mode:    enableSyncMode,
+        enable_base64_output: enableBase64Output,
+    };
+
+    if (isEdit) {
+        payload.images = images;
+    }
+    if (aspect_ratio) payload.aspect_ratio = aspect_ratio;
+    if (!isEdit)      payload.resolution = resolution;
+
+    let response = await axios.post(link, payload, {
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
+    });
+
+    if (modelDef.poll) {
+        const id = response?.data?.data?.id;
+        const maxRetries = 60;
+        const retryDelay = 10 * 1000;
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+            response = await axios.get(WAVESPEED_POLLING + id + "/result", {
+                headers: getAuthHeaders({ "Content-Type": "application/json" }),
+            });
+            const status = response?.data?.data?.status;
+            if (status === "completed" || status === "failed") return response.data;
+            await new Promise((r) => setTimeout(r, retryDelay));
+        }
+    }
+
+    return response.data;
+}
+
+/**
  * Generic Any LLM call for text-only parsing / compilation work.
  *
  * @param {AnyLLMOptions} options
@@ -564,6 +620,7 @@ module.exports = {
     setApiKey,
     uploadBufferToWaveSpeed,
     generateSeedreamEdit,
+    generateNanaBanana,
     upscaleImage,
     callAnyLLM,
     callAnyLLMVision,
