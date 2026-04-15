@@ -314,11 +314,13 @@ async function generateSeedreamEdit({
     enableSyncMode = false,
     enableBase64Output = false
 }) {
+
+    if (!_modelSchemaCache) await fetchAndCacheModelSchemas()
     const isEdit     = images.length > 0;
     const link       = isEdit
         ? (MODELS[model]?.editLink || WAVESPEED_SEEDREAM_EDIT_SEQUENTIAL_URL)
         : (MODELS[model]?.link     || WAVESPEED_SEEDREAM_URL);
-    const usesEnumSize = !!(_modelSchemaCache?.[model]?.extraParams?.aspectRatios);
+    const usesEnumSize = (_modelSchemaCache?.[model]?.baseProperites?.resolution);
 
     const payload = {
         ...extraParams,
@@ -330,7 +332,7 @@ async function generateSeedreamEdit({
     if (isEdit) payload.images = images;
 
     if (usesEnumSize) {
-        if (aspect_ratio) payload.aspect_ratio = _modelSchemaCache?.[model]?.extraParams?.aspectRatios;
+        if (aspect_ratio) payload.aspect_ratio = aspect_ratio.w + ":" + aspect_ratio.h
         if (resolution)   payload.resolution   = _modelSchemaCache?.[model]?.extraParams?.resolution;
     } else {
         if (size) payload.size = _modelSchemaCache?.[model]?.extraParams?.size;
