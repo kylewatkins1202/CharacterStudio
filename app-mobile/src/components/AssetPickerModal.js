@@ -22,6 +22,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppStore } from "../stores/AppStore";
 import { getTheme, spacing, radius } from "../lib/theme";
 import { api } from "../lib/api";
+import CSModal from "./Modal";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const COLS  = 4;
@@ -30,6 +31,7 @@ const GAP   = 4;
 const THUMB = (SCREEN_WIDTH - PAD * 2 - (COLS - 1) * GAP) / COLS;
 
 export default function AssetPickerModal({ visible, onClose, onSelect, multiple = true, title = "Pick Asset" }) {
+  if (!visible) return null
   const insets = useSafeAreaInsets();
   const colors = getTheme(AppStore.useState().theme);
 
@@ -42,6 +44,7 @@ export default function AssetPickerModal({ visible, onClose, onSelect, multiple 
   const [loadingMore,    setLoadingMore]    = useState(false);
   const [selected,       setSelected]       = useState({}); // { [assetId]: asset }
 
+  
   const loadFolders = useCallback(async () => {
     try {
       const res = await api.get("/assets/folders");
@@ -110,7 +113,7 @@ export default function AssetPickerModal({ visible, onClose, onSelect, multiple 
   };
 
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+    <CSModal visible={visible} animationType="slide" onRequestClose={onClose} colors={colors}>
       <View style={[styles.container, { backgroundColor: colors.bg }]}>
         {/* Header */}
         <View style={[styles.header, { borderBottomColor: colors.border, paddingTop: insets.top + 8 }]}>
@@ -200,7 +203,7 @@ export default function AssetPickerModal({ visible, onClose, onSelect, multiple 
           />
         )}
       </View>
-    </Modal>
+    </CSModal>
   );
 }
 

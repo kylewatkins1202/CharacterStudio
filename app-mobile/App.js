@@ -10,6 +10,7 @@ import { GalleryStore } from "./src/stores/GalleryStore";
 import { GenerateStore } from "./src/stores/GenerateStore";
 import { getBaseUrl } from "./src/lib/api";
 import { makeSyntheticResult } from "./src/lib/utils";
+import { PortalProvider } from "@gorhom/portal";
 
 // ─── SSE listener (Server-Sent Events for live gallery updates) ───────────────
 
@@ -82,12 +83,14 @@ export default function App() {
   }, []);
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <StatusBar barStyle="light-content" />
-        <Navigation />
-        <Toasts />
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+    <PortalProvider>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider>
+          <StatusBar barStyle="light-content" />
+          <Navigation />
+          <Toasts />
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    </PortalProvider>
   );
 }

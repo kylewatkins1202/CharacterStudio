@@ -91,7 +91,6 @@ const GenerateReducer = createReducer({
             : null,
         };
       }
-
       // WaveSpeed
       const modelParams = { ...(entry.modelParams || {}) };
       return {
@@ -121,12 +120,21 @@ const GenerateReducer = createReducer({
 
     // ── Fetch real-time cost ──────────────────────────────────────────────────
     FETCH_COST: async ({ state, payload }, { SUCCESS, FAIL }) => {
-      const { prompt, cloudModel, cloudModelParams, tagOverrides, wsModels } = payload ?? state;
-      if (!prompt?.trim()) return SUCCESS({ generationCost: null, costLoading: false });
+      console.log("FETCH")
+      const { prompt, cloudModel, cloudModelParams, tagOverrides, wsModels } = state;
+
+        
+      if (!prompt?.trim()) {
+          console.log('trim')
+        return SUCCESS({ generationCost: null, costLoading: false })
+      }
+
+      
 
       const modelSchema  = wsModels?.[cloudModel];
-      const usesEnumSize = !!(modelSchema?.aspectRatios);
-
+      const usesEnumSize = (modelSchema?.baseProperites?.resolution !== undefined && modelSchema?.baseProperites?.aspect_ratio !== undefined)
+      const computedSize = computeSize(cloudModelParams.aspect_ratio, cloudModelParams.baseSize)
+      // console.log(modelSchema, usesEnumSize, computedSize)
       const body = {
         prompt,
         model:    cloudModel,
@@ -135,11 +143,14 @@ const GenerateReducer = createReducer({
           ...cloudModelParams,
           ...(usesEnumSize
             ? { aspect_ratio: cloudModelParams.aspect_ratio?.label, resolution: cloudModelParams.resolution || "1k" }
-            : { size: computeSize(cloudModelParams.aspect_ratio || { w: 1, h: 1 }, cloudModelParams.baseSize || 2048) }),
+            : { size: computedSize, aspect_ratio: cloudModelParams?.aspect_ratio?.label }),
         },
       };
+
+      console.log(body)
       delete body.modelParams.baseSize;
 
+      console.log(body)
       try {
         const res = await api.post("/generate/image/cost", body);
         if (res.ok) SUCCESS({ generationCost: "$" + res.unitPrice, costLoading: false });
@@ -164,8 +175,8 @@ const GenerateReducer = createReducer({
       } = state;
 
       const modelSchema  = wsModels?.[cloudModel];
-      const usesEnumSize = !!(modelSchema?.aspectRatios);
-
+      const usesEnumSize = (modelSchema?.baseProperites?.resolution !== undefined && modelSchema?.baseProperites?.aspect_ratio !== undefined)
+      const computedSize = computeSize(cloudModelParams.aspect_ratio, cloudModelParams.baseSize)
       const body = {
         prompt,
         negPrompt: negPrompt ?? "",
@@ -184,7 +195,7 @@ const GenerateReducer = createReducer({
             ...cloudModelParams,
             ...(usesEnumSize
               ? { aspect_ratio: cloudModelParams.aspect_ratio?.label, resolution: cloudModelParams.resolution || "1k" }
-              : { size: computeSize(cloudModelParams.aspect_ratio || { w: 1, h: 1 }, cloudModelParams.baseSize || 2048) }),
+              : { size: computedSize, aspect_ratio: cloudModelParams?.aspect_ratio?.label }),
           },
         }),
         referenceAssetIds:  referenceImages.filter((i) => i.assetId).map((i) => ({ id: i.assetId, purpose: i.purpose })),
@@ -195,7 +206,7 @@ const GenerateReducer = createReducer({
       };
 
       delete body.modelParams?.baseSize;
-
+      
       try {
         const res = await api.post("/generate/image", body);
         if (res.ok) {

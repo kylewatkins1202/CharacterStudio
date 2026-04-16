@@ -10,7 +10,11 @@ import { GenerateStore } from "../stores/GenerateStore";
 import { AppStore } from "../stores/AppStore";
 import { getTheme, spacing, radius } from "../lib/theme";
 import { useToast } from "../components/Toast";
-
+import CSModal from "../components/Modal";
+import * as ImagePicker from "expo-image-picker";
+import * as FileSystem from 'expo-file-system/legacy';
+import * as MediaLibrary from 'expo-media-library';
+import * as Sharing from 'expo-sharing';
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const PAD   = spacing.page;
 const THUMB = 400; // fixed square thumbnail size for list layout
@@ -120,13 +124,36 @@ function EntryModal({ entry, colors, insets, onClose, navigation }) {
   };
 
   const handleSave = async () => {
-    if (!imgUrl) return;
-    try {
-      await Share.share({ url: imgUrl, message: imgUrl });
-    } catch (e) {
-      toast.add("Share failed: " + e.message, "error");
-    }
-  };
+      if (!imgUrl) return;
+  
+      try {
+        // Fetch image as binary
+        const response = await fetch(imgUrl);
+        const contentType = response.headers.get("content-type");
+        const extension = contentType?.includes("png") ? "png" : "jpg";
+        const buffer = await response.arrayBuffer();
+  
+        // Convert to base64 safely
+        const base64 = btoa(
+          new Uint8Array(buffer)
+            .reduce((data, byte) => data + String.fromCharCode(byte), '')
+        );
+  
+        const fileUri =
+          FileSystem.documentDirectory + `share_${Date.now()}.${extension}`;
+  
+        // Write file
+        await FileSystem.writeAsStringAsync(fileUri, base64, {
+          encoding: 'base64',
+        });
+  
+        // Share actual file
+        await Sharing.shareAsync(fileUri);
+  
+      } catch (e) {
+        toast.add("Share failed: " + e.message, "error");
+      }
+    };
 
   const handleDelete = () => {
     Alert.alert("Delete", "Delete this image?", [
@@ -146,8 +173,7 @@ function EntryModal({ entry, colors, insets, onClose, navigation }) {
   };
 
   return (
-    <Modal visible={!!entry} animationType="slide" onRequestClose={onClose}>
-      <View style={[styles.modal, { backgroundColor: colors.bg }]}>
+    <CSModal onClose={onClose} colors={colors}>
         {/* Modal header */}
         <View style={[styles.modalHeader, { borderBottomColor: colors.border, paddingTop: insets.top + 8 }]}>
           <TouchableOpacity onPress={onClose} style={styles.modalBackBtn}>
@@ -241,8 +267,7 @@ function EntryModal({ entry, colors, insets, onClose, navigation }) {
             </View>
           ) : null}
         </ScrollView>
-      </View>
-    </Modal>
+    </CSModal>
   );
 }
 

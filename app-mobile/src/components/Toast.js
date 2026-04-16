@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from "react";
 import { View, Text, StyleSheet, Animated } from "react-native";
 import { AppStore } from "../stores/AppStore";
 import { getTheme } from "../lib/theme";
+import { Portal } from "@gorhom/portal";
 
 function ToastItem({ toast, colors }) {
   const opacity = useRef(new Animated.Value(1)).current;
@@ -37,11 +38,13 @@ export default function Toasts() {
   if (!toasts.length) return null;
 
   return (
-    <View style={styles.container}>
-      {toasts.map((t) => (
-        <ToastItem key={t.id} toast={t} colors={colors} />
-      ))}
-    </View>
+    <Portal>
+      <View style={styles.container}>
+        {toasts.map((t) => (
+          <ToastItem key={t.id} toast={t} colors={colors} />
+        ))}
+      </View>
+    </Portal>
   );
 }
 

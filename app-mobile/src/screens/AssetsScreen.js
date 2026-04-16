@@ -2,9 +2,12 @@ import React, { useEffect, useState, useCallback } from "react";
 import {
   View, Text, FlatList, TouchableOpacity, Image,
   StyleSheet, Dimensions, ActivityIndicator, ScrollView,
-  RefreshControl, Modal,
+  RefreshControl, Modal, Share
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
+import * as FileSystem from 'expo-file-system/legacy';
+import * as MediaLibrary from 'expo-media-library';
+import * as Sharing from 'expo-sharing';
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import { AppStore } from "../stores/AppStore";
@@ -12,6 +15,8 @@ import { GenerateStore } from "../stores/GenerateStore";
 import { getTheme, spacing, radius } from "../lib/theme";
 import { api } from "../lib/api";
 import { useToast } from "../components/Toast";
+import { Portal } from "@gorhom/portal";
+import CSModal from "../components/Modal";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const COLS  = 4;
@@ -41,6 +46,38 @@ function AssetModal({ asset, colors, insets, onClose, onHideToggle, navigation }
     navigation.navigate("Generate");
   };
 
+  const handleSave = async () => {
+    if (!imgUrl) return;
+
+    try {
+      // Fetch image as binary
+      const response = await fetch(imgUrl);
+      const contentType = response.headers.get("content-type");
+      const extension = contentType?.includes("png") ? "png" : "jpg";
+      const buffer = await response.arrayBuffer();
+
+      // Convert to base64 safely
+      const base64 = btoa(
+        new Uint8Array(buffer)
+          .reduce((data, byte) => data + String.fromCharCode(byte), '')
+      );
+
+      const fileUri =
+        FileSystem.documentDirectory + `share_${Date.now()}.${extension}`;
+
+      // Write file
+      await FileSystem.writeAsStringAsync(fileUri, base64, {
+        encoding: 'base64',
+      });
+
+      // Share actual file
+      await Sharing.shareAsync(fileUri);
+
+    } catch (e) {
+      toast.add("Share failed: " + e.message, "error");
+    }
+  };
+
   const handleToggleHidden = async () => {
     const next = !asset.hidden;
     try {
@@ -58,69 +95,73 @@ function AssetModal({ asset, colors, insets, onClose, onHideToggle, navigation }
   };
 
   return (
-    <Modal visible={!!asset} animationType="slide" onRequestClose={onClose}>
-      <View style={[styles.modal, { backgroundColor: colors.bg }]}>
-        {/* Header */}
-        <View style={[styles.modalHeader, { borderBottomColor: colors.border, paddingTop: insets.top + 8 }]}>
-          <TouchableOpacity onPress={onClose} style={styles.modalBackBtn}>
-            <Text style={{ color: colors.textMuted, fontFamily: "Courier New", fontSize: 13 }}>← Back</Text>
-          </TouchableOpacity>
-          <Text style={{ color: colors.textHigh, fontFamily: "Courier New", fontSize: 12, flex: 1, textAlign: "center" }}>
-            {asset.folder || "Asset"}
-          </Text>
-          <View style={{ minWidth: 60 }} />
-        </View>
+    <CSModal onClose={onClose} colors={colors}>
+          {/* Header */}
+          <View style={[styles.modalHeader, { borderBottomColor: colors.border, paddingTop: insets.top + 8 }]}>
+            <TouchableOpacity onPress={onClose} style={styles.modalBackBtn}>
+              <Text style={{ color: colors.textMuted, fontFamily: "Courier New", fontSize: 13 }}>← Back</Text>
+            </TouchableOpacity>
+            <Text style={{ color: colors.textHigh, fontFamily: "Courier New", fontSize: 12, flex: 1, textAlign: "center" }}>
+              {asset.folder || "Asset"}
+            </Text>
+            <View style={{ minWidth: 60 }} />
+          </View>
 
-        <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}>
-          {/* Image */}
-          {imgUrl ? (
-            <Image
-              source={{ uri: imgUrl }}
-              style={styles.modalImage}
-              resizeMode="contain"
-            />
-          ) : (
-            <View style={[styles.modalImage, { backgroundColor: colors.surfaceSink, alignItems: "center", justifyContent: "center" }]}>
-              <Text style={{ color: colors.textGhost, fontFamily: "Courier New", fontSize: 13 }}>No image</Text>
+          <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}>
+            {/* Image */}
+            {imgUrl ? (
+              <Image
+                source={{ uri: imgUrl }}
+                style={styles.modalImage}
+                resizeMode="contain"
+              />
+            ) : (
+              <View style={[styles.modalImage, { backgroundColor: colors.surfaceSink, alignItems: "center", justifyContent: "center" }]}>
+                <Text style={{ color: colors.textGhost, fontFamily: "Courier New", fontSize: 13 }}>No image</Text>
+              </View>
+            )}
+
+            {/* Actions */}
+            <View style={[styles.actionRow, { paddingHorizontal: PAD }]}>
+              <TouchableOpacity
+                onPress={handleAddAsRef}
+                style={[styles.actionBtn, { backgroundColor: colors.primary, flex: 2 }]}
+              >
+                <Text style={{ color: colors.primaryText, fontFamily: "Courier New", fontSize: 13, fontWeight: "600" }}>
+                  + Add as Ref
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleSave}
+                style={[styles.actionBtn, { borderColor: colors.borderStrong, borderWidth: 1, flex: 1 }]}
+              >
+                <Text style={{ color: colors.textMuted, fontFamily: "Courier New", fontSize: 12 }}>↑ Share</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleToggleHidden}
+                style={[styles.actionBtn, { borderColor: colors.borderStrong, borderWidth: 1, flex: 1 }]}
+              >
+                <Text style={{ color: colors.textMuted, fontFamily: "Courier New", fontSize: 12 }}>
+                  {asset.hidden ? "○ Unhide" : "● Hide"}
+                </Text>
+              </TouchableOpacity>
             </View>
-          )}
 
-          {/* Actions */}
-          <View style={[styles.actionRow, { paddingHorizontal: PAD }]}>
-            <TouchableOpacity
-              onPress={handleAddAsRef}
-              style={[styles.actionBtn, { backgroundColor: colors.primary, flex: 2 }]}
-            >
-              <Text style={{ color: colors.primaryText, fontFamily: "Courier New", fontSize: 13, fontWeight: "600" }}>
-                + Add as Ref
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={handleToggleHidden}
-              style={[styles.actionBtn, { borderColor: colors.borderStrong, borderWidth: 1, flex: 1 }]}
-            >
-              <Text style={{ color: colors.textMuted, fontFamily: "Courier New", fontSize: 12 }}>
-                {asset.hidden ? "○ Unhide" : "● Hide"}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Meta */}
-          <View style={{ paddingHorizontal: PAD, marginTop: 8 }}>
-            {asset.folder ? (
-              <Text style={{ color: colors.textGhost, fontFamily: "Courier New", fontSize: 11 }}>
-                Folder: {asset.folder}
-              </Text>
-            ) : null}
-            {asset.hidden ? (
-              <Text style={{ color: colors.textGhost, fontFamily: "Courier New", fontSize: 11, marginTop: 4 }}>
-                Hidden
-              </Text>
-            ) : null}
-          </View>
-        </ScrollView>
-      </View>
-    </Modal>
+            {/* Meta */}
+            <View style={{ paddingHorizontal: PAD, marginTop: 8 }}>
+              {asset.folder ? (
+                <Text style={{ color: colors.textGhost, fontFamily: "Courier New", fontSize: 11 }}>
+                  Folder: {asset.folder}
+                </Text>
+              ) : null}
+              {asset.hidden ? (
+                <Text style={{ color: colors.textGhost, fontFamily: "Courier New", fontSize: 11, marginTop: 4 }}>
+                  Hidden
+                </Text>
+              ) : null}
+            </View>
+          </ScrollView>
+    </CSModal>
   );
 }
 
