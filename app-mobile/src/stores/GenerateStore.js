@@ -68,6 +68,7 @@ const GenerateReducer = createReducer({
     SET_LOCAL_SCHEDULER:  ({ payload }) => ({ localScheduler: payload }),
     SET_LOCAL_SAMPLER:    ({ payload }) => ({ localSampler: payload }),
 
+    UPDATE_REFERENCE_IMAGES: ({state, payload }) => ({ referenceImages: [...(state?.referenceImages ?? []), payload] }),
     // ── Restore from gallery entry (Use Prompt) ───────────────────────────────
     RESTORE_FROM_ENTRY: ({ payload: entry }) => {
       if (entry.mode === "local") {
@@ -91,8 +92,17 @@ const GenerateReducer = createReducer({
             : null,
         };
       }
+
       // WaveSpeed
       const modelParams = { ...(entry.modelParams || {}) };
+      
+      // Compute base size
+      if (modelParams?.size !== undefined) {
+        let widthHeight = modelParams?.size.split("*").map(Number)
+        modelParams.baseSize = Math.max(...widthHeight)
+        delete modelParams.size
+      }
+
       return {
         mode:             "wavespeed",
         prompt:           entry.userPrompt || "",
@@ -195,7 +205,7 @@ const GenerateReducer = createReducer({
             ...cloudModelParams,
             ...(usesEnumSize
               ? { aspect_ratio: cloudModelParams.aspect_ratio?.label, resolution: cloudModelParams.resolution || "1k" }
-              : { size: computedSize, aspect_ratio: cloudModelParams?.aspect_ratio?.label }),
+              : { size: computedSize }),
           },
         }),
         referenceAssetIds:  referenceImages.filter((i) => i.assetId).map((i) => ({ id: i.assetId, purpose: i.purpose })),

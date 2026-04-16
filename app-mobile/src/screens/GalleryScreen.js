@@ -116,8 +116,8 @@ function EntryModal({ entry, colors, insets, onClose, navigation }) {
       purpose: "",
       assetId: entry.imageAssetId,
     };
-    const current = GenerateStore.getState().referenceImages;
-    GenerateStore.actions.SET_REFERENCE_IMAGES([...current, ref]);
+
+    GenerateStore.actions.UPDATE_REFERENCE_IMAGES(ref);
     toast.add("Added as reference", "success");
     onClose();
     navigation.navigate("Generate");

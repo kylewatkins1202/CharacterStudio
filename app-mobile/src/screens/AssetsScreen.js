@@ -39,8 +39,7 @@ function AssetModal({ asset, colors, insets, onClose, onHideToggle, navigation }
       purpose: "",
       assetId: asset.id,
     };
-    const current = GenerateStore.getState().referenceImages;
-    GenerateStore.actions.SET_REFERENCE_IMAGES([...current, ref]);
+    GenerateStore.actions.UPDATE_REFERENCE_IMAGES(ref);
     toast.add("Added as reference", "success");
     onClose();
     navigation.navigate("Generate");

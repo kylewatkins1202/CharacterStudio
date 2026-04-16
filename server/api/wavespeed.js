@@ -320,7 +320,7 @@ async function generateSeedreamEdit({
     const link       = isEdit
         ? (MODELS[model]?.editLink || WAVESPEED_SEEDREAM_EDIT_SEQUENTIAL_URL)
         : (MODELS[model]?.link     || WAVESPEED_SEEDREAM_URL);
-    const usesEnumSize = (_modelSchemaCache?.[model]?.baseProperites?.resolution);
+    const usesEnumSize = (_modelSchemaCache?.[model]?.baseProperites?.resolution !== undefined);
 
     const payload = {
         ...extraParams,
@@ -332,10 +332,10 @@ async function generateSeedreamEdit({
     if (isEdit) payload.images = images;
 
     if (usesEnumSize) {
-        if (aspect_ratio) payload.aspect_ratio = aspect_ratio.w + ":" + aspect_ratio.h
-        if (resolution)   payload.resolution   = _modelSchemaCache?.[model]?.extraParams?.resolution;
+        delete payload.size
     } else {
-        if (size) payload.size = _modelSchemaCache?.[model]?.extraParams?.size;
+        delete payload.resolution
+        delete payload.aspect_ratio
     }
 
     let response = await axios.post(link, payload, {
