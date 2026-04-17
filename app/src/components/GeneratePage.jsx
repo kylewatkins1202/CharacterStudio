@@ -54,6 +54,7 @@ export function GeneratePage({
   localScheduler, setLocalScheduler,
   localSampler,   setLocalSampler,
   resetCache, setResetCache,
+  useRawPrompt, setUseRawPrompt,
   mode, setMode,
   negPrompt, setNegPrompt,
   localGenerationEnabled,
@@ -176,6 +177,7 @@ export function GeneratePage({
         referenceImageUrls: referenceImages.filter((i) => i.isUrl).map((i) => ({ url: i.url || i.src, purpose: i.purpose })),
         tagLocks: tagOverrides,
         resetCache,
+        useRawPrompt,
       };
 
       const res = await api.post("/generate/image", body);
@@ -365,6 +367,17 @@ export function GeneratePage({
             />
             <span style={{ fontFamily: font.mono, fontSize: font.sizeSm, color: resetCache ? colors.textMuted : colors.textGhost, transition: "color 0.15s" }}>
               Reset cache
+            </span>
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", userSelect: "none" }}>
+            <input
+              type="checkbox"
+              checked={useRawPrompt}
+              onChange={(e) => setUseRawPrompt(e.target.checked)}
+              style={{ accentColor: colors.primary, cursor: "pointer", width: 13, height: 13 }}
+            />
+            <span style={{ fontFamily: font.mono, fontSize: font.sizeSm, color: useRawPrompt ? colors.textMuted : colors.textGhost, transition: "color 0.15s" }}>
+              Raw prompt
             </span>
           </label>
           <button

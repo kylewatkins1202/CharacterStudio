@@ -1,6 +1,6 @@
 {
   "name": "imagegenerator",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "main": "main.js",
   "scripts": {
     "start": "node server.js",
@@ -31,6 +31,7 @@
       "preload.js",
       "server.js",
       "comfyui.js",
+      "expo-tunnel.js",
       "server/**/*",
       "app/dist/**/*",
       "!server/data",
@@ -42,6 +43,11 @@
       {
         "from": ".env",
         "to": ".env"
+      },
+      {
+        "from": "app-mobile",
+        "to": "app-mobile",
+        "filter": ["**/*", "!node_modules/**", "!node_modules", "!.expo/**", "!.expo"]
       }
     ],
     "mac": {
@@ -78,6 +84,7 @@
     "expo-media-library": "^55.0.14",
     "express": "^5.2.1",
     "form-data": "^4.0.5",
+    "qrcode": "^1.5.4",
     "sharp": "^0.34.5",
     "uuid": "^13.0.0",
     "ws": "^8.20.0"

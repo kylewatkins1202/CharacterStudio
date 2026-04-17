@@ -20,6 +20,7 @@ const GenerateReducer = createReducer({
     result:          null,           // { images: string[] } | null
     compiled:        null,           // { rawPrompt, images } | null
     resetCache:      false,
+    useRawPrompt:    false,
     tagOverrides:    {},             // { [tagKey]: { appearance?, bodyShape?, basic? } }
 
     // Cloud (WaveSpeed)
@@ -57,6 +58,7 @@ const GenerateReducer = createReducer({
     SET_RESULT:           ({ payload }) => ({ result: payload }),
     SET_COMPILED:         ({ payload }) => ({ compiled: payload }),
     SET_RESET_CACHE:      ({ payload }) => ({ resetCache: payload }),
+    SET_USE_RAW_PROMPT:   ({ payload }) => ({ useRawPrompt: payload }),
     SET_CLOUD_MODEL:      ({ payload }) => ({ cloudModel: payload }),
     SET_CLOUD_MODEL_PARAMS: ({ payload }) => ({ cloudModelParams: payload }),
     SET_TAG_OVERRIDES:    ({ payload }) => ({ tagOverrides: payload }),
@@ -86,10 +88,11 @@ const GenerateReducer = createReducer({
           referenceImages: entry.referenceImages?.length
             ? entry.referenceImages.map(({ url, purpose }) => ({ url, isUrl: true, purpose: purpose || "" }))
             : [],
-          result:   makeSyntheticResult(entry.imageUrl),
-          compiled: (entry.compiledPrompt || entry.compiledImages?.length)
+          result:        makeSyntheticResult(entry.imageUrl),
+          compiled:      (entry.compiledPrompt || entry.compiledImages?.length)
             ? { rawPrompt: entry.compiledPrompt || "", images: entry.compiledImages || [] }
             : null,
+          useRawPrompt:  entry.useRawPrompt ?? false,
         };
       }
 
@@ -111,10 +114,11 @@ const GenerateReducer = createReducer({
         referenceImages:  entry.referenceImages?.length
           ? entry.referenceImages.map(({ url, purpose }) => ({ url, isUrl: true, purpose: purpose || "" }))
           : [],
-        result:   makeSyntheticResult(entry.imageUrl || entry.localUrl),
-        compiled: (entry.compiledPrompt || entry.compiledImages?.length)
+        result:       makeSyntheticResult(entry.imageUrl || entry.localUrl),
+        compiled:     (entry.compiledPrompt || entry.compiledImages?.length)
           ? { rawPrompt: entry.compiledPrompt || "", images: entry.compiledImages || [] }
           : null,
+        useRawPrompt: entry.useRawPrompt ?? false,
       };
     },
 
@@ -181,7 +185,7 @@ const GenerateReducer = createReducer({
         cloudModel, cloudModelParams, wsModels,
         localModel, localSteps, localCfg, localDenoise,
         localLoras, localScheduler, localSampler,
-        tagOverrides, resetCache,
+        tagOverrides, resetCache, useRawPrompt,
       } = state;
 
       const modelSchema  = wsModels?.[cloudModel];
@@ -211,8 +215,9 @@ const GenerateReducer = createReducer({
         referenceAssetIds:  referenceImages.filter((i) => i.assetId).map((i) => ({ id: i.assetId, purpose: i.purpose })),
         referenceImages:    referenceImages.filter((i) => !i.assetId && !i.isUrl).map((i) => ({ data: i.src, purpose: i.purpose })),
         referenceImageUrls: referenceImages.filter((i) => i.isUrl).map((i) => ({ url: i.url || i.src, purpose: i.purpose })),
-        tagLocks:   tagOverrides,
+        tagLocks:      tagOverrides,
         resetCache,
+        useRawPrompt:  useRawPrompt || false,
       };
 
       delete body.modelParams?.baseSize;

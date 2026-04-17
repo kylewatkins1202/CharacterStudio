@@ -2,5 +2,10 @@
     "eslint.useFlatConfig": true,
     "eslint.options": {
         "overrideConfigFile": "eslint.config.js"
+    },
+    "files.watcherExclude": {
+        "**/dist/**": true,
+        "**/build/**": true,
+        "**/*.asar": true
     }
 }

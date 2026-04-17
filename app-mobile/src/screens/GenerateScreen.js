@@ -276,7 +276,7 @@ export default function GenerateScreen({ navigation }) {
   const {
     prompt, negPrompt, mode, referenceImages, result, compiled,
     cloudModel, cloudModelParams, wsModels,
-    generationCost, costLoading, starting, resetCache,
+    generationCost, costLoading, starting, resetCache, useRawPrompt,
   } = state;
 
   const modelSchema  = wsModels?.[cloudModel];
@@ -398,6 +398,20 @@ export default function GenerateScreen({ navigation }) {
               </View>
               <Text style={{ color: colors.textGhost, fontFamily: "Courier New", fontSize: 11, marginLeft: 4 }}>
                 Reset cache
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => GenerateStore.actions.SET_USE_RAW_PROMPT(!useRawPrompt)}
+              style={styles.row}
+            >
+              <View style={[styles.checkbox, {
+                borderColor:     colors.borderStrong,
+                backgroundColor: useRawPrompt ? colors.primary : "transparent",
+              }]}>
+                {useRawPrompt && <Text style={{ color: colors.primaryText, fontSize: 8 }}>✓</Text>}
+              </View>
+              <Text style={{ color: colors.textGhost, fontFamily: "Courier New", fontSize: 11, marginLeft: 4 }}>
+                Raw prompt
               </Text>
             </TouchableOpacity>
             <TouchableOpacity

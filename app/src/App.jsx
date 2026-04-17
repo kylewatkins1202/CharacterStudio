@@ -57,6 +57,7 @@ export default function App() {
   const [compiled,        setCompiled]        = useState(null);
   // When true the next generate call skips the server-side cache
   const [resetCache,      setResetCache]      = useState(false);
+  const [useRawPrompt,    setUseRawPrompt]    = useState(false);
   // Array of reference image objects attached to the current prompt
   const [referenceImages, setReferenceImages] = useState([]);
   // Mode for generating
@@ -254,6 +255,7 @@ export default function App() {
     
     // Restore the original user prompt
     setPrompt(entry.userPrompt);
+    setUseRawPrompt(entry.useRawPrompt ?? false);
 
     // Restore reference images (populated server-side from asset IDs)
     if (entry.referenceImages?.length) {
@@ -436,6 +438,7 @@ export default function App() {
           localScheduler={localScheduler} setLocalScheduler={setLocalScheduler}
           localSampler={localSampler}     setLocalSampler={setLocalSampler}
           resetCache={resetCache} setResetCache={setResetCache}
+          useRawPrompt={useRawPrompt} setUseRawPrompt={setUseRawPrompt}
           onGenerated={handleGenerated}
         />
       </div>

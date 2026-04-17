@@ -1,6 +1,7 @@
 const { app, BrowserWindow, shell, ipcMain } = require("electron");
 const path = require("path");
 const { startComfyUI, stopComfyUI } = require("./comfyui");
+const { startExpoTunnel, stopExpoTunnel, getExpoState, getTailscaleIp, installTailscale } = require("./expo-tunnel");
 const { DATA_DIR } = require("./server/db");
 
 const envPath = process.env.NODE_ENV === "production"
@@ -49,6 +50,32 @@ function createWindow() {
     })
   });
 
+  // ── Expo mobile tunnel ──────────────────────────────────────────────────────
+  ipcMain.handle("expo:start", async () => {
+    await startExpoTunnel(
+      (data)   => mainWindow?.webContents.send("expo:qr-update", data),
+      (status) => mainWindow?.webContents.send("expo:status", status),
+      (line)   => mainWindow?.webContents.send("expo:log", line)
+    );
+    return { ok: true };
+  });
+
+  ipcMain.handle("expo:stop", () => {
+    stopExpoTunnel();
+    return { ok: true };
+  });
+
+  ipcMain.handle("expo:get-state", () => getExpoState());
+
+  // ── Tailscale ───────────────────────────────────────────────────────────────
+  ipcMain.handle("tailscale:get-ip", async () => {
+    return getTailscaleIp();
+  });
+
+  ipcMain.handle("tailscale:install", async () => {
+    return installTailscale();
+  });
+
   const url = isDev
     ? "http://localhost:5173"
     : `http://localhost:${PORT}`;
@@ -94,9 +121,11 @@ app.whenReady().then(bootstrap);
 
 app.on("window-all-closed", () => {
   if (localGenerationEnabled) stopComfyUI();
+  stopExpoTunnel();
   if (process.platform !== "darwin") app.quit();
 });
 
 app.on("before-quit", () => {
   if (localGenerationEnabled) stopComfyUI();
+  stopExpoTunnel();
 });

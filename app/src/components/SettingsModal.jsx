@@ -43,12 +43,95 @@ export function SettingsModal({ onClose, toast, theme, setTheme }) {
   // Whether the cache info tooltip is visible
   const [showCacheInfo,        setShowCacheInfo]        = useState(false);
 
+  // Expo tunnel state
+  const [expoStatus,     setExpoStatus]     = useState("idle"); // "idle"|"installing"|"starting"|"running"|"error"
+  const [expoUrl,        setExpoUrl]        = useState(null);
+  const [expoQrDataUrl,  setExpoQrDataUrl]  = useState(null);
+  const [expoLogs,       setExpoLogs]       = useState([]);
+
+  // Tailscale state
+  const [tailscaleIp,          setTailscaleIp]          = useState(null);
+  const [tailscaleInstalled,   setTailscaleInstalled]   = useState(false);
+  const [tailscaleLoading,     setTailscaleLoading]     = useState(false);
+  const [installingTailscale,  setInstallingTailscale]  = useState(false);
+
+  const isElectron = Boolean(window.electronAPI);
+
   // Load current settings on mount
   useEffect(() => {
     api.get("/settings").then((res) => {
       if (res.ok) setApiKey(res.settings.wavespeedApiKey || "");
     });
   }, []);
+
+  // Register Electron IPC listeners and fetch Tailscale IP on mount
+  useEffect(() => {
+    if (!isElectron) return;
+
+    // Rehydrate tunnel state in case the modal was closed while it was running
+    window.electronAPI.getExpoState().then(({ status, url, qrDataUrl }) => {
+      setExpoStatus(status);
+      if (url) setExpoUrl(url);
+      if (qrDataUrl) setExpoQrDataUrl(qrDataUrl);
+    });
+
+    window.electronAPI.onExpoQrUpdate(({ url, qrDataUrl }) => {
+      setExpoUrl(url);
+      setExpoQrDataUrl(qrDataUrl);
+    });
+    window.electronAPI.onExpoStatus((status) => setExpoStatus(status));
+    window.electronAPI.onExpoLog((line) => {
+      if (!line.trim()) return;
+      setExpoLogs((prev) => [...prev.slice(-199), line]);
+    });
+
+    fetchTailscaleIp();
+
+    return () => window.electronAPI.removeExpoListeners();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const fetchTailscaleIp = async () => {
+    if (!isElectron) return;
+    setTailscaleLoading(true);
+    try {
+      const result = await window.electronAPI.getTailscaleIp();
+      setTailscaleIp(result.ip);
+      setTailscaleInstalled(result.installed);
+    } finally {
+      setTailscaleLoading(false);
+    }
+  };
+
+  const toggleExpoTunnel = async () => {
+    if (expoStatus === "idle" || expoStatus === "error") {
+      setExpoUrl(null);
+      setExpoQrDataUrl(null);
+      setExpoLogs([]);
+      await window.electronAPI.startExpoTunnel();
+    } else {
+      await window.electronAPI.stopExpoTunnel();
+      setExpoUrl(null);
+      setExpoQrDataUrl(null);
+      setExpoLogs([]);
+    }
+  };
+
+  const handleInstallTailscale = async () => {
+    setInstallingTailscale(true);
+    try {
+      const result = await window.electronAPI.installTailscale();
+      if (result.ok) {
+        toast.add("Tailscale installed — sign in via the system tray", "success");
+        fetchTailscaleIp();
+      } else {
+        toast.add(result.error || "Installation failed", "error");
+      }
+    } catch {
+      toast.add("Failed to install Tailscale", "error");
+    } finally {
+      setInstallingTailscale(false);
+    }
+  };
 
   // Close on backdrop click
   const handleBackdrop = (e) => {
@@ -275,6 +358,176 @@ export function SettingsModal({ onClose, toast, theme, setTheme }) {
             </button>
           </div>
         </div>
+
+        {/* ── Mobile App Hosting ────────────────────────────────────────────── */}
+        {isElectron && (
+          <div style={section}>
+            <div style={sectionTitle}>Mobile App Hosting</div>
+
+            {/* Toggle button */}
+            <button
+              onClick={toggleExpoTunnel}
+              disabled={expoStatus === "starting"}
+              style={{
+                padding:      "7px 18px",
+                borderRadius: radius.md,
+                border:       `1px solid ${expoStatus === "running" ? "#2a3a1a" : colors.borderStrong}`,
+                background:   expoStatus === "running" ? "#1a2a0a" : colors.surfaceSink,
+                color:        expoStatus === "running" ? "#7ec850" : colors.textMid,
+                fontFamily:   font.mono,
+                fontSize:     font.sizeLg,
+                cursor:       expoStatus === "starting" ? "not-allowed" : "pointer",
+                opacity:      expoStatus === "starting" ? 0.6 : 1,
+                transition:   "all 0.15s",
+              }}
+            >
+              {expoStatus === "idle"     && "Host Mobile App"}
+              {expoStatus === "starting" && "Starting…"}
+              {expoStatus === "running"  && "Stop Hosting"}
+              {expoStatus === "error"    && "Retry"}
+            </button>
+
+            {/* Status label */}
+            {expoStatus !== "idle" && (
+              <div style={{
+                marginTop:  10,
+                fontFamily: font.mono,
+                fontSize:   font.sizeSm,
+                color:      expoStatus === "running"   ? "#7ec850"
+                          : expoStatus === "error"     ? "#ff6b6b"
+                          : colors.textMuted,
+              }}>
+                {expoStatus === "installing" && "Installing dependencies — first run only…"}
+                {expoStatus === "starting"   && "Starting Expo tunnel…"}
+                {expoStatus === "running"    && "Expo tunnel is running"}
+                {expoStatus === "error"      && "Expo failed to start"}
+              </div>
+            )}
+
+            {/* Live log — shown while installing/starting, collapsed once QR is available */}
+            {(expoStatus === "installing" || expoStatus === "starting" || expoStatus === "error") && expoLogs.length > 0 && (
+              <div style={{
+                marginTop:    12,
+                background:   colors.surfaceSink,
+                border:       `1px solid ${colors.borderMid}`,
+                borderRadius: radius.md,
+                padding:      "10px 12px",
+                maxHeight:    140,
+                overflowY:    "auto",
+                fontFamily:   font.mono,
+                fontSize:     font.sizeXs,
+                color:        colors.textMuted,
+                lineHeight:   1.6,
+                whiteSpace:   "pre-wrap",
+                wordBreak:    "break-all",
+              }}
+                ref={(el) => { if (el) el.scrollTop = el.scrollHeight; }}
+              >
+                {expoLogs.join("\n")}
+              </div>
+            )}
+
+            {/* QR code + URL */}
+            {expoQrDataUrl && (
+              <div style={{ marginTop: 16, display: "flex", alignItems: "flex-start", gap: 16 }}>
+                <img
+                  src={expoQrDataUrl}
+                  alt="Expo QR code"
+                  style={{
+                    width:        160,
+                    height:       160,
+                    borderRadius: radius.md,
+                    border:       `1px solid ${colors.borderStrong}`,
+                    background:   "#fff",
+                    flexShrink:   0,
+                  }}
+                />
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ color: colors.textMid, fontFamily: font.mono, fontSize: font.sizeSm, marginBottom: 6 }}>
+                    Scan with Expo Go
+                  </div>
+                  <div style={{
+                    color:        colors.textMuted,
+                    fontFamily:   font.mono,
+                    fontSize:     font.sizeXs,
+                    wordBreak:    "break-all",
+                    lineHeight:   1.5,
+                  }}>
+                    {expoUrl}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Tailscale ─────────────────────────────────────────────────────── */}
+        {isElectron && (
+          <div style={section}>
+            <div style={sectionTitle}>Tailscale</div>
+
+            {tailscaleInstalled ? (
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                  <div style={{
+                    fontFamily: font.mono,
+                    fontSize:   font.sizeLg,
+                    color:      tailscaleIp ? colors.textHigh : colors.textMuted,
+                  }}>
+                    {tailscaleLoading ? "Fetching…" : tailscaleIp ? tailscaleIp : "Not connected"}
+                  </div>
+                  <button
+                    onClick={fetchTailscaleIp}
+                    disabled={tailscaleLoading}
+                    title="Refresh IP"
+                    style={{
+                      background:   "none",
+                      border:       `1px solid ${colors.borderStrong}`,
+                      borderRadius: radius.md,
+                      color:        colors.textMuted,
+                      fontFamily:   font.mono,
+                      fontSize:     font.sizeLg,
+                      cursor:       tailscaleLoading ? "not-allowed" : "pointer",
+                      padding:      "3px 10px",
+                      opacity:      tailscaleLoading ? 0.5 : 1,
+                    }}
+                  >
+                    ↺
+                  </button>
+                </div>
+                {tailscaleIp && (
+                  <div style={{ color: colors.textMuted, fontFamily: font.mono, fontSize: font.sizeSm }}>
+                    Set your mobile Server URL to{" "}
+                    <span style={{ color: colors.textMid }}>http://{tailscaleIp}:4989</span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div>
+                <div style={{ color: colors.textMuted, fontFamily: font.mono, fontSize: font.sizeSm, marginBottom: 12 }}>
+                  Tailscale not detected. Install it to access this server from your phone over a secure tunnel.
+                </div>
+                <button
+                  onClick={handleInstallTailscale}
+                  disabled={installingTailscale}
+                  style={{
+                    padding:      "7px 18px",
+                    borderRadius: radius.md,
+                    border:       `1px solid ${colors.borderStrong}`,
+                    background:   colors.surfaceSink,
+                    color:        colors.textMid,
+                    fontFamily:   font.mono,
+                    fontSize:     font.sizeLg,
+                    cursor:       installingTailscale ? "not-allowed" : "pointer",
+                    opacity:      installingTailscale ? 0.6 : 1,
+                  }}
+                >
+                  {installingTailscale ? "Installing…" : "Install Tailscale"}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ── Cache ──────────────────────────────────────────────────────────── */}
         <div style={section}>

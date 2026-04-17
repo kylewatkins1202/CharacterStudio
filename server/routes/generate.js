@@ -38,6 +38,40 @@ const VISION_MODEL = process.env.VISION_MODEL || "google/gemini-2.5-flash";
 
 const COST_PER_MEGAPIXEL = 0.06;
 
+/**
+ * Skips LLM compilation — replaces @tags directly with image[n] references.
+ * Single image → "image[n]", multiple images → "image[n - m]".
+ */
+function buildRawCompiled(prompt, tagList) {
+  const images = [];
+  let rawPrompt = prompt;
+
+  for (const tag of tagList) {
+    const { assets = {} } = tag;
+    const tagImages = [
+      ...(assets.face     || []),
+      ...(assets.body     || []),
+      ...(assets.prop     || []),
+      ...(assets.outfit   || []),
+      ...(assets.location || []),
+    ].map((a) => a.url).filter(Boolean);
+
+    if (tagImages.length === 0) continue;
+
+    const startIdx = images.length;
+    images.push(...tagImages);
+    const endIdx = images.length - 1;
+
+    const ref = tagImages.length === 1
+      ? `image[${startIdx}]`
+      : `image[${startIdx} - ${endIdx}]`;
+
+    rawPrompt = rawPrompt.replace(new RegExp(`@${tag.key}\\b`, "gi"), ref);
+  }
+
+  return { rawPrompt, images };
+}
+
 function estimateCost(model, {usedLLM = false, useVision = false} = {}) {
   const modelCost = wavespeed.MODELS[model].cost
   const llmCost = usedLLM ? wavespeed.LLM_MODELS[LLM_MODEL].cost : 0;
@@ -163,6 +197,7 @@ router.post("/image", async (req, res) => {
     const enableSyncMode     = req.body.enable_sync_mode !== false;
     const enableBase64Output = req.body.enable_base64_output === true;
     const resetCache         = req.body.resetCache === true;
+    const useRawPrompt       = req.body.useRawPrompt === true;
     const mode               = req.body.mode
     const model              = req.body.model
     const size               = req.body.modelParams?.size;
@@ -192,25 +227,30 @@ router.post("/image", async (req, res) => {
       tagList = await healTagAssets(await db.tags.getTags(tagKeys));
 
       if (tagList.length > 0) {
-        const cacheKey = db.cache.makeCacheKey(prompt, tagLocks, tagList);
-
-        if (resetCache) {
-          await db.cache.deleteCached(cacheKey);
-          console.log(`[cache reset] ${cacheKey.slice(0, 12)}…`);
-        }
-
-        compiled = await db.cache.getCached(cacheKey);
-
-        if (compiled) {
-          console.log(`[cache hit] ${cacheKey.slice(0, 12)}…`);
+        if (useRawPrompt) {
+          // Skip LLM — replace @tags with image[n] references directly
+          compiled = buildRawCompiled(prompt, tagList);
         } else {
-          compiled = await compilePrompt({
-            prompt, tags: tagList, tagLocks,
-            parserOptions: { model: LLM_MODEL },
-            visionOptions: { enable: useVision, force: false, model: VISION_MODEL }
-          });
-          didCompile = true
-          await db.cache.setCached(cacheKey, compiled);
+          const cacheKey = db.cache.makeCacheKey(prompt, tagLocks, tagList);
+
+          if (resetCache) {
+            await db.cache.deleteCached(cacheKey);
+            console.log(`[cache reset] ${cacheKey.slice(0, 12)}…`);
+          }
+
+          compiled = await db.cache.getCached(cacheKey);
+
+          if (compiled) {
+            console.log(`[cache hit] ${cacheKey.slice(0, 12)}…`);
+          } else {
+            compiled = await compilePrompt({
+              prompt, tags: tagList, tagLocks,
+              parserOptions: { model: LLM_MODEL },
+              visionOptions: { enable: useVision, force: false, model: VISION_MODEL }
+            });
+            didCompile = true
+            await db.cache.setCached(cacheKey, compiled);
+          }
         }
       }
     }
@@ -315,6 +355,7 @@ router.post("/image", async (req, res) => {
       model,
       modelParams,
       negPrompt,
+      useRawPrompt:     useRawPrompt || false,
       timestamp:        new Date().toISOString(),
     };
 
