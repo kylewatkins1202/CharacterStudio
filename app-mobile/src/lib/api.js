@@ -6,6 +6,7 @@
  */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { setApi } from "../../../shared/lib/apiRef.js";
 
 const TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -50,3 +51,5 @@ export const api = {
   patch:  (path, body)  => request("PATCH",  path, body),
   delete: (path, body)  => request("DELETE", path, body),
 };
+
+setApi(api);

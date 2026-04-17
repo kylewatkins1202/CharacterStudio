@@ -1,3 +1,5 @@
+import { setApi } from "../../../shared/lib/apiRef.js";
+
 /**
  * lib/api.js
  *
@@ -63,6 +65,8 @@ export const api = {
     return r.json();
   },
 };
+
+setApi(api);
 
 /**
  * Read a File object and resolve with its base64 data-URI string.

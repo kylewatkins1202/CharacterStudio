@@ -1,91 +1,40 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { api } from "../lib/api";
 import { DownloadButton } from "./DownloadButton";
 import { ImageLightbox } from "./ImageLightbox";
 import { Pagination } from "./Pagination";
 import { colors, font, radius } from "../theme";
+import { GalleryStore } from "../../../shared/stores/GalleryStore.js";
 
-// ─── GalleryPage ──────────────────────────────────────────────────────────────
+export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale }) {
+  const { entries, loading, page, total, totalPages, showHidden } = GalleryStore.useState();
 
-export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale, sseEntries, onEntriesLoaded, galleryVersion, onVersionLoaded }) {
-  // Local entry list — used when sseEntries (from App) is not yet populated
-  const [localEntries, setLocalEntries] = useState([]);
-  const [loading,      setLoading]      = useState(true);
-  const [showHidden,   setShowHidden]   = useState(false);
-  const [showAll,      setShowAll]      = useState(false);
-  const [revealed,     setRevealed]     = useState(new Set());
-  const [lightboxSrc,  setLightboxSrc]  = useState(null);
-
-  // Pagination
-  const [page,       setPage]       = useState(1);
-  const [pageSize]                  = useState(20);
-  const [total,      setTotal]      = useState(0);
-  const [totalPages, setTotalPages] = useState(1);
-
-  // Use the SSE-maintained list if available, fall back to local fetch results
-  const entries    = sseEntries ?? localEntries;
-  const setEntries = useCallback((updater) => {
-    if (sseEntries !== null) {
-      // Propagate the update through App so SSE keeps the list coherent
-      onEntriesLoaded(typeof updater === "function" ? updater(sseEntries) : updater);
-    } else {
-      setLocalEntries(updater);
-    }
-  }, [sseEntries, onEntriesLoaded]);
-
-  const load = useCallback(async (p = 1, hidden = showHidden) => {
-    setLoading(true);
-    try {
-      const hiddenParam = hidden ? "" : "&hidden=false";
-      const res = await api.get(`/gallery?page=${p}&pageSize=${pageSize}${hiddenParam}`);
-      if (res.ok) {
-        setLocalEntries(res.entries);
-        // Give App the fetched snapshot so SSE events can be merged into it
-        onEntriesLoaded(res.entries);
-        setTotal(res.total ?? 0);
-        setTotalPages(res.totalPages ?? 1);
-        setPage(p);
-        if (res.version) onVersionLoaded(res.version);
-      }
-    } catch {
-      toast.add("Failed to load gallery", "error");
-    }
-    setLoading(false);
-  }, [toast, pageSize, showHidden, onEntriesLoaded, onVersionLoaded]);
+  const [showAll,     setShowAll]     = useState(false);
+  const [revealed,    setRevealed]    = useState(new Set());
+  const [lightboxSrc, setLightboxSrc] = useState(null);
 
   useEffect(() => {
-    // Lightweight version check — if the gallery data hasn't changed since our
-    // last visit and we already have entries cached in sseEntries, skip the full
-    // fetch (which heals every asset on the page). Otherwise do the full fetch.
-    const init = async () => {
-      if (sseEntries !== null && galleryVersion !== null) {
-        try {
-          const meta = await api.get(`/gallery/meta?pageSize=${pageSize}&hidden=false`);
-          if (meta.ok && meta.version === galleryVersion) {
-            // Data unchanged — use cached entries, refresh counts from meta
-            setTotal(meta.total);
-            setTotalPages(meta.totalPages);
-            setLoading(false);
-            return;
-          }
-        } catch {}
-      }
-      load(1);
-    };
-    init();
+    if (entries.length === 0) {
+      GalleryStore.actions.LOAD_PAGE({ page: 1, showHidden });
+    } else {
+      GalleryStore.actions.SET_LOADING(false);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const load = (p, hidden = showHidden) => {
+    GalleryStore.actions.LOAD_PAGE({ page: p, showHidden: hidden });
+  };
 
   const handleDelete = async (id) => {
     try {
       const res = await api.delete(`/gallery/${id}`);
       if (res.ok) {
         toast.add("Deleted", "success");
-        setEntries((prev) => prev.filter((e) => e.id !== id));
-        // Reload if page is now empty and not first page
+        GalleryStore.actions.REMOVE_ENTRY(id);
         const remaining = entries.filter((e) => e.id !== id);
-        const nextPage = remaining.length === 0 && page > 1 ? page - 1 : page;
-        if (remaining.length === 0) load(nextPage);
+        if (remaining.length === 0 && page > 1) load(page - 1);
+        else if (remaining.length === 0) load(page);
       } else {
         toast.add(res.error || "Delete failed", "error");
       }
@@ -102,7 +51,7 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale, sse
         : `/gallery/${entry.id}`;
       const res = await api.patch(endpoint, { hidden: next });
       if (res.ok) {
-        setEntries((prev) => prev.map((e) => e.id === entry.id ? { ...e, hidden: next } : e));
+        GalleryStore.actions.UPDATE_ENTRY({ id: entry.id, hidden: next });
         if (next) setRevealed((p) => { const s = new Set(p); s.delete(entry.id); return s; });
         toast.add(next ? "Image hidden" : "Image visible", "success");
       }
@@ -121,7 +70,6 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale, sse
 
   const handleToggleShowHidden = () => {
     const next = !showHidden;
-    setShowHidden(next);
     setShowAll(false);
     load(1, next);
   };
@@ -129,12 +77,11 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale, sse
   const totalCost      = entries.reduce((sum, e) => sum + parseFloat(e.cost || 0), 0);
   const hiddenCount    = entries.filter((e) => e.hidden).length;
   const visibleEntries = entries.filter((e) => showHidden ? true : !e.hidden);
-  
+
   return (
     <div style={{ margin: "0 auto", padding: "40px 8px" }}>
       {lightboxSrc && <ImageLightbox {...lightboxSrc} upscale={onUpscale} onClose={() => setLightboxSrc(null)} />}
 
-      {/* Page header */}
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 32, position: "fixed", background: colors.surface, zIndex: 100, top: 54, left: 0, right: 0, padding: "24px", borderBottom: `1px solid ${colors.border}` }}>
         <div>
           <h1 style={{ fontFamily: font.serif, fontSize: font.sizeHeading, fontWeight: 700, color: colors.textHigh, margin: 0, letterSpacing: "-0.02em" }}>
@@ -170,7 +117,6 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale, sse
         </div>
       </div>
 
-      {/* Content */}
       {loading ? (
         <div style={{ display: "flex", justifyContent: "center", padding: "60px 0", marginTop: 90 }}>
           <div style={{ width: 32, height: 32, border: `2px solid ${colors.borderMid}`, borderTop: `2px solid ${colors.borderStrong}`, borderRadius: "50%", animation: "spin 1s linear infinite" }} />
@@ -183,11 +129,9 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale, sse
         <>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr 1fr 1fr", gap: 6, marginTop: 90 }}>
             {visibleEntries.map((entry) => {
-              // ── Loading card ───────────────────────────────────────────
               if (entry.loading) {
                 return (
                   <div key={entry.id} style={{ background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: radius.xl, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-                    {/* Shimmer placeholder */}
                     <div style={{ width: "100%", paddingTop: "100%", position: "relative", background: `linear-gradient(90deg, ${colors.border} 25%, ${colors.borderMid} 50%, ${colors.border} 75%)`, backgroundSize: "200% 100%", animation: "shimmer 1.4s infinite" }}>
                       <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
                         <div style={{ width: 28, height: 28, border: `2px solid ${colors.borderStrong}`, borderTop: `2px solid ${colors.borderFocus}`, borderRadius: "50%", animation: "spin 1s linear infinite" }} />
@@ -203,7 +147,6 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale, sse
                 );
               }
 
-              // ── Error card ─────────────────────────────────────────────
               if (entry.error) {
                 return (
                   <div key={entry.id} style={{ background: colors.surface, border: `1px solid ${colors.errorA44}`, borderRadius: radius.xl, overflow: "hidden", padding: "14px" }}>
@@ -219,7 +162,6 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale, sse
                 );
               }
 
-              // ── Normal card ────────────────────────────────────────────
               const isRevealed = revealed.has(entry.id);
               const isHidden   = entry.hidden;
 
@@ -246,7 +188,6 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale, sse
                     )}
                   </div>
 
-                  {/* Card footer */}
                   <div style={{ padding: "12px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
                     <p style={{ color: colors.textDim, fontFamily: font.mono, fontSize: font.sizeSm, margin: 0, lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
                       {entry.userPrompt}
@@ -292,7 +233,7 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale, sse
                           entry={entry}
                           onOpened={(localUrl) => window.electronAPI?.openFileLocation(localUrl)}
                           onDownloaded={(id, localUrl) =>
-                            setEntries((prev) => prev.map((e) => e.id === id ? { ...e, localUrl } : e))
+                            GalleryStore.actions.UPDATE_ENTRY({ id, localUrl })
                           }
                         />
                         <button

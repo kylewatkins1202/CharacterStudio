@@ -1,76 +1,32 @@
 import { api } from "../lib/api";
 import { computeSize, extractImageUrl } from "../lib/utils";
-import { ASPECT_RATIOS } from "../lib/constants";
 import { PromptInput } from "./PromptInput";
 import { ReferenceImageInput } from "./ReferenceImageInput";
 import { LocalOptions } from "./LocalOptions";
 import { colors, font, radius, fieldLabel as FL } from "../theme";
 import { useState, useEffect, useMemo } from "react";
 import { CloudOptions } from "./CloudOptions";
+import { GenerateStore } from "../../../shared/stores/GenerateStore.js";
+import { AppStore } from "../stores/AppStore.js";
 
-/**
- * GeneratePage — the main image generation view.
- *
- * All state is owned by the App root so it survives tab switches.
- * This component is purely presentational: it reads props and calls setters.
- *
- * @param {{
- *   tags: object[],
- *   toast: { add: Function },
- *   prompt: string,
- *   setPrompt: Function,
- *   aspect: { label: string, w: number, h: number },
- *   setAspect: Function,
- *   baseSize: number,
- *   setBaseSize: Function,
- *   loading: boolean,
- *   setLoading: Function,
- *   result: object|null,
- *   setResult: Function,
- *   compiled: object|null,
- *   setCompiled: Function,
- *   referenceImages: object[],
- *   setReferenceImages: Function,
- *   resetCache: boolean,
- *   setResetCache: Function,
- *   onGenerated: () => void
- * }} props
- */
-export function GeneratePage({
-  tags, toast,
-  prompt, setPrompt,
-  aspect, setAspect,
-  baseSize, setBaseSize,
-  result, setResult,
-  compiled, setCompiled,
-  referenceImages, setReferenceImages,
-  maxReferenceImages,
-  cloudModel,   setCloudModel,
-  localModel,   setLocalModel,
-  localSteps,   setLocalSteps,
-  localCfg,     setLocalCfg,
-  localDenoise, setLocalDenoise,
-  localLoras,     setLocalLoras,
-  localScheduler, setLocalScheduler,
-  localSampler,   setLocalSampler,
-  resetCache, setResetCache,
-  useRawPrompt, setUseRawPrompt,
-  mode, setMode,
-  negPrompt, setNegPrompt,
-  localGenerationEnabled,
-  onGenerated,
-  cloudModelParams, setCloudModelParams,
-}) {
-  // True only while the server is acknowledging the generate request (brief)
-  const [starting, setStarting] = useState(false);
-  const [wsModels, setWsModels] = useState({});
-  // Per-tag descriptor overrides: { [tagKey]: { appearance?: bool, bodyShape?: bool, basic?: bool } }
-  const [tagOverrides, setTagOverrides] = useState({});
-  // Dynamic cost fetched from /generate/image/cost
-  const [generationCost, setGenerationCost] = useState(null);
-  const [costLoading, setCostLoading] = useState(false);
+export function GeneratePage({ toast, localGenerationEnabled }) {
+  const {
+    prompt, negPrompt, mode, referenceImages,
+    result, compiled, resetCache, useRawPrompt,
+    cloudModel, cloudModelParams,
+    localModel, localSteps, localCfg, localDenoise,
+    localLoras, localScheduler, localSampler,
+    tagOverrides, wsModels,
+  } = GenerateStore.useState();
 
-  // Tags currently referenced in the prompt via @key tokens
+  const { tags } = AppStore.useState();
+
+  const [starting,        setStarting]        = useState(false);
+  const [generationCost,  setGenerationCost]  = useState(null);
+  const [costLoading,     setCostLoading]     = useState(false);
+
+  const maxReferenceImages = mode === "local" ? 3 : null;
+
   const referencedTags = useMemo(() => {
     const hits = new Set([...prompt.matchAll(/@(\S+)/g)].map((m) => m[1]));
     return tags.filter((t) => hits.has(t.key));
@@ -78,29 +34,25 @@ export function GeneratePage({
 
   const getOverride = (key, field) => tagOverrides[key]?.[field] ?? true;
   const setOverride = (key, field, value) =>
-    setTagOverrides((prev) => ({ ...prev, [key]: { ...(prev[key] || {}), [field]: value } }));
-  
-  useEffect(() => {
-    api.get("/models/wavespeed/options").then((res) => {
-      if (res.ok) setWsModels(res.models);
-    }).catch(() => {});
-  }, []);
+    GenerateStore.actions.SET_TAG_OVERRIDES({ ...tagOverrides, [key]: { ...(tagOverrides[key] || {}), [field]: value } });
 
-  // Clamp baseSize to the selected model's max when cloudModel or wsModels changes
+  // Clamp baseSize to model max when model or models list changes
   useEffect(() => {
     const max = wsModels[cloudModel]?.max;
-    if (max && baseSize > max) setBaseSize(max);
+    if (max && cloudModelParams.baseSize > max) {
+      GenerateStore.actions.SET_CLOUD_MODEL_PARAMS({ ...cloudModelParams, baseSize: max });
+    }
   }, [cloudModel, wsModels]);
 
-  
-
-  // Fetch real-time cost from the backend (debounced 600ms)
+  // Debounced cost fetch
   useEffect(() => {
-    if (mode !== "wavespeed" || !prompt.trim()) return;
+    if (mode !== "wavespeed" || !prompt.trim()) {
+      setGenerationCost(null);
+      setCostLoading(false);
+      return;
+    }
     setCostLoading(true);
-
-    const usesEnumSize = (wsModels[cloudModel]?.resolution && wsModels[cloudModel]?.aspectRatios);
-    
+    const usesEnumSize = !!(wsModels[cloudModel]?.resolution && wsModels[cloudModel]?.aspectRatios);
     const timer = setTimeout(async () => {
       try {
         const body = {
@@ -110,49 +62,40 @@ export function GeneratePage({
           modelParams: {
             ...cloudModelParams,
             ...(usesEnumSize
-              ? { aspect_ratio: aspect.label, resolution: cloudModelParams.resolution || "1k" }
-              : { size: computeSize(aspect, baseSize) })
+              ? { aspect_ratio: cloudModelParams.aspect_ratio?.label, resolution: cloudModelParams.resolution || "1k" }
+              : { size: computeSize(cloudModelParams.aspect_ratio, cloudModelParams.baseSize) }),
           },
         };
-
-        delete body.modelParams.baseSize
-
+        delete body.modelParams.baseSize;
         const res = await api.post("/generate/image/cost", body);
-        if (res.ok) {
-          setGenerationCost("$" + res.unitPrice);
-        } else {
-          setGenerationCost(null);
-        }
+        if (res.ok) setGenerationCost("$" + res.unitPrice);
+        else setGenerationCost(null);
       } catch {
         setGenerationCost(null);
       }
       setCostLoading(false);
     }, 600);
     return () => clearTimeout(timer);
-  }, [prompt, cloudModel, aspect, baseSize, cloudModelParams, tagOverrides, mode]);
+  }, [prompt, cloudModel, cloudModelParams, tagOverrides, mode, wsModels]);
 
+  const imageUrl = result ? extractImageUrl(result) : null;
 
-  const imageUrl     = result ? extractImageUrl(result) : null;
-
-  /**
-   * Generates image and shows the image and its raw prompt to the user
-   * @returns {Promise<void>}
-   */
   const generate = async () => {
     if (!prompt.trim()) return toast.add("Please enter a prompt", "error");
 
     setStarting(true);
-    setResult(null);
-    setCompiled(null);
-    const usesEnumSize = (wsModels[cloudModel]?.resolution && wsModels[cloudModel]?.aspectRatios);
-    console.log(wsModels[cloudModel])
-    const computedSize = computeSize(cloudModelParams.aspect_ratio, cloudModelParams.baseSize);
+    GenerateStore.actions.SET_RESULT(null);
+    GenerateStore.actions.SET_COMPILED(null);
+
+    const usesEnumSize  = !!(wsModels[cloudModel]?.resolution && wsModels[cloudModel]?.aspectRatios);
+    const computedSize  = computeSize(cloudModelParams.aspect_ratio, cloudModelParams.baseSize);
+
     try {
       const body = {
         prompt,
-        negPrompt: negPrompt ?? '',
+        negPrompt: negPrompt ?? "",
         mode,
-        ...(mode === 'local' ? {
+        ...(mode === "local" ? {
           model:     localModel,
           steps:     localSteps,
           cfg:       localCfg,
@@ -165,27 +108,23 @@ export function GeneratePage({
           modelParams: {
             ...cloudModelParams,
             ...(usesEnumSize
-            ? { aspect_ratio: aspect.label, resolution: cloudModelParams.resolution || "1k" }
-            : { size: computedSize }),
+              ? { aspect_ratio: cloudModelParams.aspect_ratio?.label, resolution: cloudModelParams.resolution || "1k" }
+              : { size: computedSize }),
           },
         }),
-        // Existing assets picked from the library — resolved server-side by ID
         referenceAssetIds:  referenceImages.filter((i) => i.assetId).map((i) => ({ id: i.assetId, purpose: i.purpose })),
-        // New base64 uploads — creates an asset record on the backend
         referenceImages:    referenceImages.filter((i) => !i.assetId && !i.isUrl).map((i) => ({ data: i.src, purpose: i.purpose })),
-        // Pasted URLs — healed if a matching asset exists, used as-is otherwise
         referenceImageUrls: referenceImages.filter((i) => i.isUrl).map((i) => ({ url: i.url || i.src, purpose: i.purpose })),
-        tagLocks: tagOverrides,
+        tagLocks:     tagOverrides,
         resetCache,
-        useRawPrompt,
+        useRawPrompt: useRawPrompt || false,
       };
+      delete body.modelParams?.baseSize;
 
       const res = await api.post("/generate/image", body);
-
       if (res.ok) {
         toast.add("Generation started!", "success");
-        setResetCache(false);
-        onGenerated();
+        GenerateStore.actions.SET_RESET_CACHE(false);
       } else {
         toast.add(res.error || "Generation failed", "error");
       }
@@ -198,7 +137,6 @@ export function GeneratePage({
 
   return (
     <div style={{ maxWidth: 820, margin: "0 auto", padding: "40px 24px" }}>
-      {/* Page header */}
       <div style={{ marginBottom: 32 }}>
         <h1 style={{ fontFamily: font.serif, fontSize: font.sizeHeading, fontWeight: 700, color: colors.textHigh, margin: 0, letterSpacing: "-0.02em" }}>
           Generate
@@ -207,9 +145,9 @@ export function GeneratePage({
           Craft your scene — type <span style={{ color: colors.textMuted }}>@</span> to reference tags
         </p>
         <br />
-        <div> 
+        <div>
           <button
-            onClick={() => {console.log('set'); setMode('wavespeed')}}
+            onClick={() => GenerateStore.actions.SET_MODE("wavespeed")}
             style={{
               padding:      "10px 32px",
               background:   mode !== "wavespeed" ? "#111" : colors.primary,
@@ -228,7 +166,7 @@ export function GeneratePage({
           </button>
           {localGenerationEnabled && (
             <button
-              onClick={() => setMode('local')}
+              onClick={() => GenerateStore.actions.SET_MODE("local")}
               style={{
                 padding:      "10px 32px",
                 background:   mode !== "local" ? "#111" : colors.primary,
@@ -250,37 +188,41 @@ export function GeneratePage({
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <PromptInput value={prompt} onChange={setPrompt} tags={mode === 'wavespeed' ? tags : []} disableTags={mode === 'local' ? true : false} placeholder={mode === "wavespeed" ? "Describe your scene… use @tag to reference characters, outfits, props & locations" : "Describe your scene…"} />
-        {
-          mode === 'local' &&
-            <PromptInput value={negPrompt} onChange={setNegPrompt} placeholder={"Negative prompt…"}></PromptInput>
-        }
+        <PromptInput
+          value={prompt}
+          onChange={(v) => GenerateStore.actions.SET_PROMPT(v)}
+          tags={mode === "wavespeed" ? tags : []}
+          disableTags={mode === "local"}
+          placeholder={mode === "wavespeed" ? "Describe your scene… use @tag to reference characters, outfits, props & locations" : "Describe your scene…"}
+        />
+        {mode === "local" && (
+          <PromptInput value={negPrompt} onChange={(v) => GenerateStore.actions.SET_NEG_PROMPT(v)} placeholder="Negative prompt…" />
+        )}
 
         {/* Per-tag descriptor toggles */}
-        {mode === 'wavespeed' && referencedTags.length > 0 && (
+        {mode === "wavespeed" && referencedTags.length > 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {referencedTags.map((tag) => {
-              const isChar   = tag.type === "character";
+              const isChar    = tag.type === "character";
               const hasAppear = isChar && !!tag.lock?.appearanceDescription;
               const hasBody   = isChar && !!tag.lock?.bodyDescription;
               const hasBasic  = !isChar && !!tag.lock?.basicDescription;
               const hasAny    = hasAppear || hasBody || hasBasic;
 
-              // Available fields for the "All" checkbox
               const allOn = (
                 (!hasAppear || getOverride(tag.key, "appearance")) &&
                 (!hasBody   || getOverride(tag.key, "bodyShape")) &&
                 (!hasBasic  || getOverride(tag.key, "basic"))
               );
               const toggleAll = (value) => {
-                setTagOverrides((prev) => ({
-                  ...prev,
+                GenerateStore.actions.SET_TAG_OVERRIDES({
+                  ...tagOverrides,
                   [tag.key]: {
                     ...(hasAppear ? { appearance: value } : {}),
                     ...(hasBody   ? { bodyShape:  value } : {}),
                     ...(hasBasic  ? { basic:       value } : {}),
                   },
-                }));
+                });
               };
 
               return (
@@ -290,7 +232,6 @@ export function GeneratePage({
                     <span style={{ fontFamily: font.mono, fontSize: font.sizeSm, color: colors.borderStrong }}>no descriptions</span>
                   ) : (
                     <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
-                      {/* All toggle */}
                       <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", userSelect: "none" }}>
                         <input type="checkbox" checked={allOn} onChange={(e) => toggleAll(e.target.checked)} style={{ accentColor: colors.primary, cursor: "pointer" }} />
                         <span style={{ fontFamily: font.mono, fontSize: font.sizeSm, color: colors.textMuted }}>All</span>
@@ -320,6 +261,7 @@ export function GeneratePage({
             })}
           </div>
         )}
+
         {/* Reference images */}
         <div>
           <label style={FL}>
@@ -328,26 +270,29 @@ export function GeneratePage({
               — passed directly to the model alongside tag images
             </span>
           </label>
-          <ReferenceImageInput images={referenceImages} onChange={setReferenceImages} maxImages={maxReferenceImages} />
+          <ReferenceImageInput
+            images={referenceImages}
+            onChange={(v) => GenerateStore.actions.SET_REFERENCE_IMAGES(v)}
+            maxImages={maxReferenceImages}
+          />
         </div>
 
-        {/* Local ComfyUI options */}
-        {mode === 'local' && (
+        {mode === "local" && (
           <LocalOptions
-            model={localModel}     onModelChange={setLocalModel}
-            steps={localSteps}     onStepsChange={setLocalSteps}
-            cfg={localCfg}         onCfgChange={setLocalCfg}
-            denoise={localDenoise} onDenoiseChange={setLocalDenoise}
-            loras={localLoras}           onLorasChange={setLocalLoras}
-            scheduler={localScheduler}   onSchedulerChange={setLocalScheduler}
-            sampler={localSampler}       onSamplerChange={setLocalSampler}
+            model={localModel}     onModelChange={(v) => GenerateStore.actions.SET_LOCAL_MODEL(v)}
+            steps={localSteps}     onStepsChange={(v) => GenerateStore.actions.SET_LOCAL_STEPS(v)}
+            cfg={localCfg}         onCfgChange={(v) => GenerateStore.actions.SET_LOCAL_CFG(v)}
+            denoise={localDenoise} onDenoiseChange={(v) => GenerateStore.actions.SET_LOCAL_DENOISE(v)}
+            loras={localLoras}           onLorasChange={(v) => GenerateStore.actions.SET_LOCAL_LORAS(v)}
+            scheduler={localScheduler}   onSchedulerChange={(v) => GenerateStore.actions.SET_LOCAL_SCHEDULER(v)}
+            sampler={localSampler}       onSamplerChange={(v) => GenerateStore.actions.SET_LOCAL_SAMPLER(v)}
           />
         )}
-        {mode === 'wavespeed' && (
+        {mode === "wavespeed" && (
           <CloudOptions
-            model={cloudModel}           onModelChange={setCloudModel}
+            model={cloudModel}           onModelChange={(v) => GenerateStore.actions.SET_CLOUD_MODEL(v)}
             models={wsModels}
-            modelParams={cloudModelParams} onModelParamsChange={setCloudModelParams}
+            modelParams={cloudModelParams} onModelParamsChange={(v) => GenerateStore.actions.SET_CLOUD_MODEL_PARAMS(v)}
           />
         )}
 
@@ -362,7 +307,7 @@ export function GeneratePage({
             <input
               type="checkbox"
               checked={resetCache}
-              onChange={(e) => setResetCache(e.target.checked)}
+              onChange={(e) => GenerateStore.actions.SET_RESET_CACHE(e.target.checked)}
               style={{ accentColor: colors.primary, cursor: "pointer", width: 13, height: 13 }}
             />
             <span style={{ fontFamily: font.mono, fontSize: font.sizeSm, color: resetCache ? colors.textMuted : colors.textGhost, transition: "color 0.15s" }}>
@@ -373,7 +318,7 @@ export function GeneratePage({
             <input
               type="checkbox"
               checked={useRawPrompt}
-              onChange={(e) => setUseRawPrompt(e.target.checked)}
+              onChange={(e) => GenerateStore.actions.SET_USE_RAW_PROMPT(e.target.checked)}
               style={{ accentColor: colors.primary, cursor: "pointer", width: 13, height: 13 }}
             />
             <span style={{ fontFamily: font.mono, fontSize: font.sizeSm, color: useRawPrompt ? colors.textMuted : colors.textGhost, transition: "color 0.15s" }}>
@@ -402,7 +347,6 @@ export function GeneratePage({
         </div>
       </div>
 
-      {/* Generated image + compiled prompt */}
       {imageUrl && (
         <div style={{ marginTop: 40, display: "flex", flexDirection: "column", gap: 16 }}>
           <img src={imageUrl} alt="Generated" style={{ width: "100%", borderRadius: radius.xl, border: `1px solid ${colors.borderMid}`, display: "block" }} />
@@ -432,7 +376,6 @@ export function GeneratePage({
         </div>
       )}
 
-      {/* Raw response fallback */}
       {!imageUrl && result && (
         <div style={{ marginTop: 24, background: colors.surface, border: `1px solid #1e1e1e`, borderRadius: radius.lg, padding: 16 }}>
           <div style={{ ...FL, marginBottom: 8 }}>Raw Response</div>

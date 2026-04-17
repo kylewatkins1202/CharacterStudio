@@ -48,6 +48,11 @@
         "from": "app-mobile",
         "to": "app-mobile",
         "filter": ["**/*", "!node_modules/**", "!node_modules", "!.expo/**", "!.expo"]
+      },
+      {
+        "from": "shared",
+        "to": "shared",
+        "filter": ["**/*"]
       }
     ],
     "mac": {
