@@ -1,6 +1,6 @@
 {
   "name": "imagegenerator",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "main": "main.js",
   "scripts": {
     "start": "node server.js",
@@ -53,6 +53,11 @@
         "from": "shared",
         "to": "shared",
         "filter": ["**/*"]
+      },
+      {
+        "from": "react-diffuse",
+        "to": "react-diffuse",
+        "filter": ["**/*", "!node_modules/**", "!node_modules"]
       }
     ],
     "mac": {

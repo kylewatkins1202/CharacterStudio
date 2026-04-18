@@ -2,45 +2,42 @@ import { useState, useEffect, useCallback } from "react";
 import { api } from "../lib/api";
 import { Pagination } from "./Pagination";
 import { colors, font, radius } from "../theme";
+import { AssetStore } from "../../../shared/stores/AssetStore";
 
 // ─── AssetPickerModal ─────────────────────────────────────────────────────────
 
 export function AssetPickerModal({ onClose, onSelect, title = "Pick from assets", excludeIds = [] }) {
-  const [assets,       setAssets]       = useState([]);
-  const [loading,      setLoading]      = useState(true);
+
   const [selected,     setSelected]     = useState(new Set());
-  const [showHidden,   setShowHidden]   = useState(false);
   const [showAll,      setShowAll]      = useState(false);
-  const [folders,      setFolders]      = useState([]);
-  const [activeFolder, setActiveFolder] = useState(null); // null = All
+  const state = AssetStore.useState()
+
+  const {
+    folders,
+    assets,
+    total,
+    page,
+    loading,
+    showHidden,
+    selectedFolder
+  } = state
+
+  // Calculate total pages
+  const totalPages = Math.ceil(total / 40) || 1;
 
   // Pagination
-  const [page,       setPage]       = useState(1);
   const [pageSize]                  = useState(40);
-  const [total,      setTotal]      = useState(0);
-  const [totalPages, setTotalPages] = useState(1);
 
-  const load = useCallback((p = 1, hidden = showHidden, folder = activeFolder) => {
-    setLoading(true);
+  const load = useCallback((p = 1, hidden = showHidden, folder = selectedFolder) => {
+    console.log(p)
     const hiddenParam  = hidden ? "" : "&hidden=false";
     const folderParam  = folder ? `&folder=${encodeURIComponent(folder)}` : "";
-    api.get(`/assets?page=${p}&pageSize=${pageSize}${hiddenParam}${folderParam}`)
-      .then((res) => {
-        if (res.ok) {
-          setAssets(res.assets);
-          setTotal(res.total ?? 0);
-          setTotalPages(res.totalPages ?? 1);
-          setPage(p);
-        }
-      })
-      .finally(() => setLoading(false));
-  }, [pageSize, showHidden, activeFolder]);
+    AssetStore.actions.LOAD_ASSETS({ page: p, showHidden: hidden, folder })
+  }, [pageSize, showHidden, selectedFolder]);
 
   // Load folder list once on mount
   useEffect(() => {
-    api.get("/assets/folders").then((res) => {
-      if (res.ok) setFolders(res.folders);
-    });
+    AssetStore.actions.LOAD_FOLDERS()
   }, []);
 
   useEffect(() => { load(1); }, [load]);
@@ -53,10 +50,14 @@ export function AssetPickerModal({ onClose, onSelect, title = "Pick from assets"
     });
   };
 
-  const handleToggleHidden = async (e, asset) => {
-    e.stopPropagation();
-    const res = await api.patch(`/assets/${asset.id}`, { hidden: !asset.hidden });
-    if (res.ok) setAssets((p) => p.map((a) => a.id === asset.id ? { ...a, hidden: !asset.hidden } : a));
+  const handleToggleHidden = async (asset) => {
+    try {
+      const res = await AssetStore.actions.TOGGLE_HIDDEN(asset)
+      if (!res?.ok) { toast.add(res.error || "Update failed", "error"); return; }
+      AssetStore.actions.UPDATE_ASSET({ id: asset.id, hidden: !asset.hidden });
+    } catch {
+      toast.add("Network error", "error");
+    }
   };
 
   const handleToggleShowHidden = () => {
@@ -72,6 +73,12 @@ export function AssetPickerModal({ onClose, onSelect, title = "Pick from assets"
     onClose();
   };
 
+  const handleFolderSwitch = (name) => {
+    setSelected(new Set());
+    setShowAll(false);
+    AssetStore.actions.SET_FOLDER(name);
+    AssetStore.actions.LOAD_ASSETS({ folder: name, showHidden: false, page: 1 });
+  }
   const hiddenCount = assets.filter((a) => a.hidden && !excludeIds.includes(a.id)).length;
   const visible     = assets.filter((a) => !excludeIds.includes(a.id));
 
@@ -178,13 +185,13 @@ export function AssetPickerModal({ onClose, onSelect, title = "Pick from assets"
         {folders.length > 0 && (
           <div style={{ display: "flex", gap: 6, padding: "10px 20px", borderBottom: `1px solid ${colors.border}`, overflowX: "auto", flexShrink: 0 }}>
             <button
-              onClick={() => { setActiveFolder(null); load(1, showHidden, null); }}
+              onClick={() => { handleFolderSwitch('') }}
               style={{
                 padding:      "4px 12px",
-                background:   activeFolder === null ? colors.borderMid : "transparent",
-                border:       `1px solid ${activeFolder === null ? colors.borderStrong : colors.border}`,
+                background:   selectedFolder === null ? colors.borderMid : "transparent",
+                border:       `1px solid ${selectedFolder === null ? colors.borderStrong : colors.border}`,
                 borderRadius: radius.md,
-                color:        activeFolder === null ? colors.textMid : colors.textMuted,
+                color:        selectedFolder === null ? colors.textMid : colors.textMuted,
                 fontFamily:   font.mono,
                 fontSize:     font.sizeSm,
                 cursor:       "pointer",
@@ -195,13 +202,13 @@ export function AssetPickerModal({ onClose, onSelect, title = "Pick from assets"
             {folders.map((f) => (
               <button
                 key={f.name}
-                onClick={() => { setActiveFolder(f.name); load(1, showHidden, f.name); }}
+                onClick={() => { handleFolderSwitch(f.name)}}
                 style={{
                   padding:      "4px 12px",
-                  background:   activeFolder === f.name ? colors.borderMid : "transparent",
-                  border:       `1px solid ${activeFolder === f.name ? colors.borderStrong : colors.border}`,
+                  background:   selectedFolder === f.name ? colors.borderMid : "transparent",
+                  border:       `1px solid ${selectedFolder === f.name ? colors.borderStrong : colors.border}`,
                   borderRadius: radius.md,
-                  color:        activeFolder === f.name ? colors.textMid : colors.textMuted,
+                  color:        selectedFolder === f.name ? colors.textMid : colors.textMuted,
                   fontFamily:   font.mono,
                   fontSize:     font.sizeSm,
                   cursor:       "pointer",

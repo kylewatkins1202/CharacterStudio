@@ -15,7 +15,7 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale }) {
 
   useEffect(() => {
     if (entries.length === 0) {
-      GalleryStore.actions.LOAD_PAGE({ page: 1, showHidden });
+      load(1)
     } else {
       GalleryStore.actions.SET_LOADING(false);
     }
@@ -23,20 +23,27 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale }) {
   }, []);
 
   const load = (p, hidden = showHidden) => {
-    GalleryStore.actions.LOAD_PAGE({ page: p, showHidden: hidden });
+    GalleryStore.actions.LOAD_PAGE({ page: p, showHidden: hidden, replace: true });
   };
 
+  /**
+   * Handle deleting gallery item
+   */
   const handleDelete = async (id) => {
     try {
-      const res = await api.delete(`/gallery/${id}`);
-      if (res.ok) {
+      // Delete entry
+      const res = await GalleryStore.actions.DELETE_ENTRY(id);
+      
+      // If failed 
+      if (res?.diffuse?.error) {
+        toast.add(res?.error, 'error')
+      }
+      else {
         toast.add("Deleted", "success");
-        GalleryStore.actions.REMOVE_ENTRY(id);
+
         const remaining = entries.filter((e) => e.id !== id);
         if (remaining.length === 0 && page > 1) load(page - 1);
         else if (remaining.length === 0) load(page);
-      } else {
-        toast.add(res.error || "Delete failed", "error");
       }
     } catch {
       toast.add("Network error", "error");
@@ -46,12 +53,8 @@ export function GalleryPage({ toast, onUsePrompt, onAddReference, onUpscale }) {
   const handleToggleHidden = async (entry) => {
     const next = !entry.hidden;
     try {
-      const endpoint = entry.imageAssetId
-        ? `/assets/${entry.imageAssetId}`
-        : `/gallery/${entry.id}`;
-      const res = await api.patch(endpoint, { hidden: next });
-      if (res.ok) {
-        GalleryStore.actions.UPDATE_ENTRY({ id: entry.id, hidden: next });
+      const res = await UPDATE_HIDDEN({entry, next})
+      if (!res?.diffuse.error) {
         if (next) setRevealed((p) => { const s = new Set(p); s.delete(entry.id); return s; });
         toast.add(next ? "Image hidden" : "Image visible", "success");
       }

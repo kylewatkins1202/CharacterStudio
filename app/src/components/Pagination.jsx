@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { colors, font, radius } from "../theme";
 
 /**
@@ -56,7 +57,10 @@ export function Pagination({ page, totalPages, onPage, compact = false }) {
   });
 
   const pages = getPageNumbers(page, totalPages);
-
+  const handleClick = useCallback((p) => {
+    console.log(p)
+    p !== page && onPage(p)
+  }, [pages])
   return (
     <div style={{ display: "flex", justifyContent: "center", alignItems: "center", flexWrap: "wrap", gap: compact ? 4 : 6, padding: wrapPad }}>
       {/* Prev arrow */}
@@ -80,7 +84,7 @@ export function Pagination({ page, totalPages, onPage, compact = false }) {
         ) : (
           <button
             key={p}
-            onClick={() => p !== page && onPage(p)}
+            onClick={() => handleClick(p)}
             style={btnStyle(p === page, false)}
           >
             {p}

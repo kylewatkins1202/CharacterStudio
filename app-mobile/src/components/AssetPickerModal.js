@@ -33,7 +33,8 @@ const THUMB = (SCREEN_WIDTH - PAD * 2 - (COLS - 1) * GAP) / COLS;
 export default function AssetPickerModal({ visible, onClose, onSelect, multiple = true, title = "Pick Asset" }) {
   if (!visible) return null
   const insets = useSafeAreaInsets();
-  const colors = getTheme(AppStore.useState().theme);
+  const {theme} = AppStore.useState()
+  const colors = getTheme();
 
   const [folders,        setFolders]        = useState([]);
   const [selectedFolder, setSelectedFolder] = useState(null);

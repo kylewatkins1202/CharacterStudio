@@ -56,7 +56,8 @@ async function populateEntry(entry) {
     const ids        = items.map((i) => i.id);
     const purposeMap = Object.fromEntries(items.map((i) => [i.id, i.purpose]));
     const assets     = await db.assets.getAssetsByIds(ids);
-    const healed     = await Promise.all(assets.map(healAsset));
+    const healed = [];
+    for (const asset of assets) healed.push(await healAsset(asset));
     referenceImages  = healed
       .filter(Boolean)
       .map((a) => ({ url: a.url, purpose: purposeMap[a.id] ?? a.purpose ?? "" }));
@@ -120,7 +121,8 @@ router.get("/gallery", async (req, res) => {
 
     const total     = filtered.length;
     const slice     = filtered.slice((page - 1) * pageSize, page * pageSize);
-    const populated = await Promise.all(slice.map(populateEntry));
+    const populated = [];
+    for (const entry of slice) populated.push(await populateEntry(entry));
     res.json({ ok: true, version: db.gallery.getVersion(), total, page, pageSize, totalPages: Math.ceil(total / pageSize), count: populated.length, entries: populated });
   } catch (error) {
     res.status(500).json({ error: "failed to fetch gallery", details: error.message });
@@ -210,7 +212,7 @@ router.post("/gallery/:id/download", async (req, res) => {
       const buffer      = Buffer.from(await imgRes.arrayBuffer());
       const contentType = imgRes.headers.get("content-type") || "image/jpeg";
       const ext         = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
-      const filename    = existingFilename || `generated-${Date.now()}.${ext}`;
+      const filename    = existingFilename || `generated-${req.params.id}.${ext}`;
       const saved       = await saveAssetLocally("generated", "result", filename, buffer);
       return { ...saved, contentType, filename };
     };

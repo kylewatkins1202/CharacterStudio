@@ -1,0 +1,1 @@
+export { AssetStore } from "../../../shared/stores/AssetStore.js";

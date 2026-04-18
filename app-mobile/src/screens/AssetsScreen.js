@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import { AppStore } from "../stores/AppStore";
 import { GenerateStore } from "../stores/GenerateStore";
+import { AssetStore } from "../stores/AssetStore";
 import { getTheme, spacing, radius } from "../lib/theme";
 import { api } from "../lib/api";
 import { useToast } from "../components/Toast";
@@ -24,7 +25,7 @@ const THUMB = (SCREEN_WIDTH - PAD * 2 - (COLS - 1) * GAP) / COLS;
 
 // ─── Asset Modal ──────────────────────────────────────────────────────────────
 
-function AssetModal({ asset, colors, insets, onClose, onHideToggle, onDelete, navigation }) {
+function AssetModal({ asset, colors, insets, onClose, navigation }) {
   const toast  = useToast();
   const imgUrl = asset?.localUrl || asset?.url;
 
@@ -56,13 +57,13 @@ function AssetModal({ asset, colors, insets, onClose, onHideToggle, onDelete, na
   const handleToggleHidden = async () => {
     const next = !asset.hidden;
     try {
-      const res = await api.patch(`/assets/${asset.id}`, { hidden: next });
+      const res = await AssetStore.actions.TOGGLE_HIDDEN(asset)
       if (res.ok) {
-        onHideToggle(asset.id, next);
         toast.add(next ? "Asset hidden" : "Asset visible", "success");
+        AssetStore.actions.UPDATE_ASSET({ id: asset.id, hidden: next });
         onClose();
       } else {
-        toast.add("Failed to update", "error");
+        toast.add(res.error || "Update failed", "error")
       }
     } catch (e) {
       toast.add(e.message, "error");
@@ -78,7 +79,8 @@ function AssetModal({ asset, colors, insets, onClose, onHideToggle, onDelete, na
           try {
             const res = await api.delete(`/assets/${asset.id}`);
             if (res.ok) {
-              onDelete(asset.id);
+              AssetStore.actions.REMOVE_ASSET(asset.id);
+              AssetStore.actions.LOAD_FOLDERS();
               toast.add("Deleted", "success");
               onClose();
             } else {
@@ -153,100 +155,46 @@ export default function AssetsScreen({ navigation }) {
   const colors = getTheme(AppStore.useState().theme);
   const toast  = useToast();
 
-  const [folders,        setFolders]        = useState([]);
-  const [selectedFolder, setSelectedFolder] = useState(null);
-  const [assets,         setAssets]         = useState([]);
-  const [page,           setPage]           = useState(1);
-  const [total,          setTotal]          = useState(0);
-  const [loading,        setLoading]        = useState(true);
-  const [refreshing,     setRefreshing]     = useState(false);
-  const [loadingMore,    setLoadingMore]    = useState(false);
-  const [showHidden,     setShowHidden]     = useState(false);
-  const [selected,       setSelected]       = useState(null);
-  const [uploading,      setUploading]      = useState(false);
+  const { folders, selectedFolder, assets, page, total, loading, loadingMore, uploading, showHidden } =
+    AssetStore.useState();
 
-  // Multi-select
-  const [multiSelectMode, setMultiSelectMode] = useState(false);
-  const [selectedIds,     setSelectedIds]     = useState(new Set());
-
-  // Folder management
+  // Local UI state only
+  const [refreshing,          setRefreshing]          = useState(false);
+  const [selected,            setSelected]            = useState(null);
+  const [multiSelectMode,     setMultiSelectMode]     = useState(false);
+  const [selectedIds,         setSelectedIds]         = useState(new Set());
   const [moveModalVisible,    setMoveModalVisible]    = useState(false);
   const [createFolderVisible, setCreateFolderVisible] = useState(false);
   const [newFolderName,       setNewFolderName]       = useState("");
   const [creatingFolder,      setCreatingFolder]      = useState(false);
 
-  const loadFolders = useCallback(async () => {
-    try {
-      const res = await api.get("/assets/folders");
-      if (res.ok) setFolders(res.folders || []);
-    } catch {}
-  }, []);
-
-  const load = useCallback(async (folderName = selectedFolder, p = 1, hidden = showHidden) => {
-    if (p === 1) setLoading(true);
-    else         setLoadingMore(true);
-    try {
-      const folderParam = folderName ? `&folder=${encodeURIComponent(folderName)}` : "";
-      const hiddenParam = hidden ? "" : "&hidden=false";
-      const res = await api.get(`/assets?page=${p}&pageSize=40${folderParam}${hiddenParam}`);
-      if (res.ok) {
-        setAssets((prev) => p === 1 ? res.assets : [...prev, ...res.assets]);
-        setTotal(res.total ?? 0);
-        setPage(p);
-      }
-    } catch {}
-    setLoading(false);
-    setLoadingMore(false);
-  }, [selectedFolder, showHidden]);
-
-  const refresh = useCallback(async () => {
-    setRefreshing(true);
-    await loadFolders();
-    await load(selectedFolder, 1, showHidden);
-    setRefreshing(false);
-  }, [selectedFolder, showHidden, load, loadFolders]);
-
   useEffect(() => {
-    loadFolders();
-    load(null, 1);
+    AssetStore.actions.LOAD_FOLDERS();
+    AssetStore.actions.LOAD_ASSETS({});
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      load(selectedFolder, 1, showHidden);
-    }, [selectedFolder, showHidden])
-  );
+
+  const refresh = useCallback(async (p = 1) => {
+    setRefreshing(true);
+    await AssetStore.actions.LOAD_ASSETS({ folder: selectedFolder, page: p, showHidden });
+    setRefreshing(false);
+  }, []);
 
   const selectFolder = (folderName) => {
-    setSelectedFolder(folderName);
-    setAssets([]);
-    load(folderName, 1);
+    AssetStore.actions.SET_FOLDER(folderName);
+    AssetStore.actions.LOAD_ASSETS({ folder: folderName, page: 1, showHidden });
   };
 
   const toggleHidden = () => {
     const next = !showHidden;
-    setShowHidden(next);
-    setAssets([]);
-    load(selectedFolder, 1, next);
+    // AssetStore.actions.SET_FOLDER(selectFolder);
+    // AssetStore.actions.SET_SHOW_HIDDEN(next);
+    AssetStore.actions.LOAD_ASSETS({ folder: selectedFolder, page: 1, showHidden: next });
   };
 
   const loadMore = () => {
     if (loadingMore || loading) return;
-    if (page * 40 < total) load(selectedFolder, page + 1);
-  };
-
-  const handleHideToggle = (id, hidden) => {
-    setAssets((prev) => prev.map((a) => a.id === id ? { ...a, hidden } : a));
-    if (!showHidden && hidden) {
-      setAssets((prev) => prev.filter((a) => a.id !== id));
-      setTotal((t) => Math.max(0, t - 1));
-    }
-  };
-
-  const handleAssetDeleted = (id) => {
-    setAssets((prev) => prev.filter((a) => a.id !== id));
-    setTotal((t) => Math.max(0, t - 1));
-    loadFolders();
+    if (page * 40 < total) AssetStore.actions.LOAD_MORE();
   };
 
   // ── Multi-select ──────────────────────────────────────────────────────────────
@@ -286,9 +234,8 @@ export default function AssetsScreen({ navigation }) {
             try {
               await Promise.all([...selectedIds].map((id) => api.delete(`/assets/${id}`)));
               const removed = new Set(selectedIds);
-              setAssets((prev) => prev.filter((a) => !removed.has(String(a.id))));
-              setTotal((t) => Math.max(0, t - count));
-              await loadFolders();
+              [...removed].forEach((id) => AssetStore.actions.REMOVE_ASSET(id));
+              AssetStore.actions.LOAD_FOLDERS();
               toast.add(`${count} asset${count !== 1 ? "s" : ""} deleted`, "success");
               clearSelection();
             } catch (e) {
@@ -303,12 +250,11 @@ export default function AssetsScreen({ navigation }) {
   const handleMove = async (targetFolder) => {
     setMoveModalVisible(false);
     try {
-      const res = await api.post("/assets/move", { ids: [...selectedIds], folder: targetFolder });
-      if (res.ok) {
-        toast.add(`Moved ${res.moved} asset${res.moved !== 1 ? "s" : ""}`, "success");
-        await loadFolders();
-        await load(selectedFolder, 1, showHidden);
-        clearSelection();
+      const array = Array.from(selectedIds);
+
+      const res = await AssetStore.actions.MOVE_ASSETS({ ids: array, folder: targetFolder });
+      if (res?.ok) {
+        toast.add(`Moved asset to "${targetFolder}"`, "success");
       } else {
         toast.add(res.error || "Move failed", "error");
       }
@@ -327,7 +273,7 @@ export default function AssetsScreen({ navigation }) {
     try {
       const res = await api.post("/assets/folders", { name });
       if (res.ok) {
-        await loadFolders();
+        AssetStore.actions.LOAD_FOLDERS();
         toast.add(`Folder "${name}" created`, "success");
         setCreateFolderVisible(false);
         setNewFolderName("");
@@ -350,24 +296,24 @@ export default function AssetsScreen({ navigation }) {
       allowsMultipleSelection: true,
     });
     if (result.canceled || !result.assets?.length) return;
-    setUploading(true);
+    AssetStore.actions.SET_UPLOADING(true);
     try {
       const images = result.assets.map((a) => `data:image/jpeg;base64,${a.base64}`);
       const folder = selectedFolder || "assets";
-      const res = await api.post("/assets", { images, folder });
-      if (res.ok) {
-        toast.add(`${res.assets.length} image${res.assets.length !== 1 ? "s" : ""} uploaded`, "success");
-        setAssets((prev) => [...res.assets, ...prev]);
-        setTotal((t) => t + res.assets.length);
-        await loadFolders();
+      const res = await AssetStore.actions.UPLOAD_ASSETS({ images, folder });
+      
+      if (res?.ok) {
+        toast.add(`Assets uploaded`, "success");
+        AssetStore.actions.PREPEND_ASSETS(res.assets);
+        AssetStore.actions.LOAD_FOLDERS();
       } else {
         toast.add(res.error || "Upload failed", "error");
       }
     } catch (e) {
       toast.add(e.message, "error");
     }
-    setUploading(false);
-  }, [selectedFolder, loadFolders, toast]);
+    AssetStore.actions.SET_UPLOADING(false);
+  }, [selectedFolder, toast]);
 
   const moveFolderOptions = folders.filter((f) => f.name !== selectedFolder);
 
@@ -493,7 +439,7 @@ export default function AssetsScreen({ navigation }) {
           contentContainerStyle={{ padding: PAD, gap: GAP, paddingBottom: insets.bottom + 20 }}
           columnWrapperStyle={{ gap: GAP }}
           onEndReached={loadMore}
-          onEndReachedThreshold={0.4}
+          onEndReachedThreshold={0.9}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />}
           ListFooterComponent={loadingMore ? <ActivityIndicator color={colors.primary} style={{ padding: 16 }} /> : null}
           renderItem={({ item }) => {
@@ -531,8 +477,6 @@ export default function AssetsScreen({ navigation }) {
         insets={insets}
         navigation={navigation}
         onClose={() => setSelected(null)}
-        onHideToggle={handleHideToggle}
-        onDelete={handleAssetDeleted}
       />
 
       {/* Move-to-folder Modal */}

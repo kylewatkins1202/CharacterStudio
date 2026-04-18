@@ -56,8 +56,8 @@ function getExpoState() {
  */
 function ensureMobileDeps(onStatus, onLog) {
   return new Promise((resolve, reject) => {
-    const nodeModulesPath = path.join(APP_MOBILE_DIR, "node_modules");
-    if (fs.existsSync(nodeModulesPath)) return resolve(undefined);
+    // const nodeModulesPath = path.join(APP_MOBILE_DIR, "node_modules");
+    // if (fs.existsSync(nodeModulesPath)) return resolve(undefined);
 
     onStatus("installing");
     onLog("Installing app-mobile dependencies…");

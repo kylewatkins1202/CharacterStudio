@@ -1,0 +1,69 @@
+{
+  "name": "react-diffuse",
+  "version": "3.0.1",
+  "description": "Light weight global state management solution",
+  "author": "RapMints",
+  "license": "MIT",
+  "repository": "RapMints/react-diffuse",
+  "main": "dist/index.js",
+  "module": "dist/index.modern.js",
+  "source": "src/index.js",
+  "engines": {
+    "node": ">=10"
+  },
+  "keywords": [
+    "diffuse",
+    "reducer",
+    "predictable",
+    "functional",
+    "state",
+    "state management",
+    "immutable",
+    "hot",
+    "live",
+    "suspense",
+    "error boundary"
+  ],
+  "scripts": {
+    "build": "microbundle-crl --no-compress --generateTypes --format modern,cjs && tsc",
+    "start": "microbundle-crl watch --no-compress --generateTypes --format modern,cjs && tsc",
+    "test:lint": "eslint .",
+    "test:unit": "cross-env CI=1 react-scripts test --env=jsdom",
+    "test:watch": "react-scripts test --env=jsdom",
+    "predeploy": "cd example && npm install && npm run build",
+    "deploy": "gh-pages -d example/build",
+    "dev": "npm run build && cd example && npm install && npm start"
+  },
+  "files": [
+    "dist"
+  ],
+  "peerDependencies": {
+    "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.1",
+    "@types/react": "^18.0.28",
+    "babel-eslint": "^10.1.0",
+    "eslint": "^8.34.0",
+    "eslint-config-prettier": "^8.5.0",
+    "eslint-config-react": "^1.1.7",
+    "eslint-config-react-app": "^7.0.1",
+    "eslint-config-standard": "^6.1.0",
+    "eslint-config-standard-react": "^13.0.0",
+    "eslint-plugin-import": "^2.26.0",
+    "eslint-plugin-node": "^11.1.0",
+    "eslint-plugin-prettier": "^4.1.0",
+    "eslint-plugin-promise": "^6.0.0",
+    "eslint-plugin-react": "^7.30.1",
+    "eslint-plugin-standard": "^5.0.0",
+    "microbundle-crl": "^0.13.11",
+    "npm-run-all": "^4.1.5",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "react-scripts": "^5.0.1",
+    "typescript": "^4.9.5"
+  },
+  "dependencies": {
+    "jsdoc": "^4.0.2"
+  }
+}

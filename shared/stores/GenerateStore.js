@@ -177,7 +177,7 @@ const GenerateReducer = createReducer({
       } = state;
 
       const modelSchema  = wsModels?.[cloudModel];
-      const usesEnumSize = !!modelSchema?.aspectRatios;
+      const usesEnumSize = (wsModels[cloudModel]?.baseProperites?.resolution && wsModels[cloudModel]?.baseProperites?.aspectRatios);
       const computedSize = computeSize(cloudModelParams.aspect_ratio, cloudModelParams.baseSize);
 
       const body = {

@@ -16,6 +16,7 @@ const envPath = process.env.NODE_ENV === "production"
 require("dotenv").config({ path: envPath });
 const express = require("express");
 const cors = require("cors");
+const { WebSocketServer } = require("ws");
 const db = require("./server/db");
 const { setApiKey } = require("./server/api/wavespeed");
 
@@ -53,10 +54,39 @@ const ready = db.setupDb()
     setApiKey(saved.wavespeedApiKey || process.env.WAVESPEED_API_KEY || "");
   })
   .then(() => new Promise((resolve) => {
-    app.listen(PORT, () => {
+    const httpServer = app.listen(PORT, () => {
       console.log(`\n  🎨  Character Studio`);
       console.log(`  ➜  API:    http://localhost:${PORT}/api`);
       console.log(`  ➜  Client: http://localhost:5173  (dev)\n`);
+
+      // ── WebSocket server for mobile clients ──────────────────────────────
+      const { activeJobs } = require("./server/routes/events");
+      const emitter = require("./server/utils/sseEmitter");
+      const wss = new WebSocketServer({ noServer: true });
+
+      const broadcast = (event, data) => {
+        const msg = JSON.stringify({ event, data });
+        for (const client of wss.clients) {
+          if (client.readyState === 1) client.send(msg);
+        }
+      };
+
+      emitter.on("gallery:new",    (entry) => broadcast("gallery:new",    entry));
+      emitter.on("gallery:update", (entry) => broadcast("gallery:update", entry));
+
+      httpServer.on("upgrade", (req, socket, head) => {
+        if (req.url === "/api/ws") {
+          wss.handleUpgrade(req, socket, head, (ws) => {
+            wss.emit("connection", ws, req);
+            for (const entry of activeJobs.values()) {
+              ws.send(JSON.stringify({ event: "gallery:new", data: entry }));
+            }
+          });
+        } else {
+          socket.destroy();
+        }
+      });
+
       resolve();
     });
   }))

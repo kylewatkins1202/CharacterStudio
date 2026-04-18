@@ -16,16 +16,27 @@ export function GeneratePage({ toast, localGenerationEnabled }) {
     cloudModel, cloudModelParams,
     localModel, localSteps, localCfg, localDenoise,
     localLoras, localScheduler, localSampler,
-    tagOverrides, wsModels,
+    tagOverrides, wsModels, generationCost, costLoading, starting,
   } = GenerateStore.useState();
 
   const { tags } = AppStore.useState();
 
-  const [starting,        setStarting]        = useState(false);
-  const [generationCost,  setGenerationCost]  = useState(null);
-  const [costLoading,     setCostLoading]     = useState(false);
-
   const maxReferenceImages = mode === "local" ? 3 : null;
+
+  // Load WaveSpeed models once
+  useEffect(() => {
+    GenerateStore.actions.LOAD_WS_MODELS({});
+  }, []);
+
+  // Debounced cost fetch
+  useEffect(() => {
+    if (mode !== "wavespeed" || !prompt.trim()) return;
+    GenerateStore.actions.SET_COST_LOADING(true);
+    const timer = setTimeout(() => {
+      GenerateStore.actions.FETCH_COST({});
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [prompt, cloudModel, cloudModelParams, mode]);
 
   const referencedTags = useMemo(() => {
     const hits = new Set([...prompt.matchAll(/@(\S+)/g)].map((m) => m[1]));
@@ -44,95 +55,13 @@ export function GeneratePage({ toast, localGenerationEnabled }) {
     }
   }, [cloudModel, wsModels]);
 
-  // Debounced cost fetch
-  useEffect(() => {
-    if (mode !== "wavespeed" || !prompt.trim()) {
-      setGenerationCost(null);
-      setCostLoading(false);
-      return;
-    }
-    setCostLoading(true);
-    const usesEnumSize = !!(wsModels[cloudModel]?.resolution && wsModels[cloudModel]?.aspectRatios);
-    const timer = setTimeout(async () => {
-      try {
-        const body = {
-          prompt,
-          model:       cloudModel,
-          tagLocks:    tagOverrides,
-          modelParams: {
-            ...cloudModelParams,
-            ...(usesEnumSize
-              ? { aspect_ratio: cloudModelParams.aspect_ratio?.label, resolution: cloudModelParams.resolution || "1k" }
-              : { size: computeSize(cloudModelParams.aspect_ratio, cloudModelParams.baseSize) }),
-          },
-        };
-        delete body.modelParams.baseSize;
-        const res = await api.post("/generate/image/cost", body);
-        if (res.ok) setGenerationCost("$" + res.unitPrice);
-        else setGenerationCost(null);
-      } catch {
-        setGenerationCost(null);
-      }
-      setCostLoading(false);
-    }, 600);
-    return () => clearTimeout(timer);
-  }, [prompt, cloudModel, cloudModelParams, tagOverrides, mode, wsModels]);
-
   const imageUrl = result ? extractImageUrl(result) : null;
 
   const generate = async () => {
     if (!prompt.trim()) return toast.add("Please enter a prompt", "error");
-
-    setStarting(true);
-    GenerateStore.actions.SET_RESULT(null);
-    GenerateStore.actions.SET_COMPILED(null);
-
-    const usesEnumSize  = !!(wsModels[cloudModel]?.resolution && wsModels[cloudModel]?.aspectRatios);
-    const computedSize  = computeSize(cloudModelParams.aspect_ratio, cloudModelParams.baseSize);
-
-    try {
-      const body = {
-        prompt,
-        negPrompt: negPrompt ?? "",
-        mode,
-        ...(mode === "local" ? {
-          model:     localModel,
-          steps:     localSteps,
-          cfg:       localCfg,
-          denoise:   localDenoise,
-          loras:     localLoras,
-          scheduler: localScheduler,
-          sampler:   localSampler,
-        } : {
-          model:       cloudModel,
-          modelParams: {
-            ...cloudModelParams,
-            ...(usesEnumSize
-              ? { aspect_ratio: cloudModelParams.aspect_ratio?.label, resolution: cloudModelParams.resolution || "1k" }
-              : { size: computedSize }),
-          },
-        }),
-        referenceAssetIds:  referenceImages.filter((i) => i.assetId).map((i) => ({ id: i.assetId, purpose: i.purpose })),
-        referenceImages:    referenceImages.filter((i) => !i.assetId && !i.isUrl).map((i) => ({ data: i.src, purpose: i.purpose })),
-        referenceImageUrls: referenceImages.filter((i) => i.isUrl).map((i) => ({ url: i.url || i.src, purpose: i.purpose })),
-        tagLocks:     tagOverrides,
-        resetCache,
-        useRawPrompt: useRawPrompt || false,
-      };
-      delete body.modelParams?.baseSize;
-
-      const res = await api.post("/generate/image", body);
-      if (res.ok) {
-        toast.add("Generation started!", "success");
-        GenerateStore.actions.SET_RESET_CACHE(false);
-      } else {
-        toast.add(res.error || "Generation failed", "error");
-      }
-    } catch (err) {
-      toast.add(err.message || "Network error", "error");
-    }
-
-    setStarting(false);
+    GenerateStore.actions.SET_STARTING(true);
+    await GenerateStore.actions.GENERATE({});
+    toast.add("Generation started!", "success");
   };
 
   return (

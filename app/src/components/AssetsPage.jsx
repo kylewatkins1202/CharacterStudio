@@ -3,6 +3,7 @@ import { api } from "../lib/api";
 import { ImageLightbox } from "./ImageLightbox";
 import { Pagination } from "./Pagination";
 import { colors, font, radius } from "../theme";
+import { AssetStore } from "../../../shared/stores/AssetStore.js";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -30,8 +31,6 @@ function FolderIcon() {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const BUILTIN_FOLDERS = ["assets", "generated", "upscaled"];
-
 function thumbUrl(asset) {
   if (asset.assetPath) return `/api/assets/${asset.id}/thumb`;
   return asset.url;
@@ -56,8 +55,10 @@ function UploadZone({ onFiles, uploading }) {
   const inputRef = useRef(null);
   const [dragging, setDragging] = useState(false);
 
-  const handleFiles = (files) => {
+  const handleFiles = (e, files) => {
     const images = Array.from(files).filter((f) => f.type.startsWith("image/"));
+    e.target.files = new DataTransfer().files; 
+    e.target.value = ''; 
     if (images.length) onFiles(images);
   };
 
@@ -82,7 +83,7 @@ function UploadZone({ onFiles, uploading }) {
       }}
     >
       <input ref={inputRef} type="file" accept="image/*" multiple style={{ display: "none" }}
-        onChange={(e) => handleFiles(e.target.files)} />
+        onChange={(e) => handleFiles(e, e.target.files)} />
       {uploading ? "Uploading…" : "Click or drag images to upload"}
     </div>
   );
@@ -93,8 +94,7 @@ function UploadZone({ onFiles, uploading }) {
 function AssetCard({ asset, selected, onToggleSelect, onUse, onToggleHidden, onDelete, onExpand, anySelected, show }) {
   const isHidden = Boolean(asset.hidden);
 
-  const handleClick = (e) => {
-    // Clicking the image tile: if any selections active → toggle; otherwise → lightbox
+  const handleClick = () => {
     if (anySelected) {
       onToggleSelect(asset.id);
     } else {
@@ -112,7 +112,6 @@ function AssetCard({ asset, selected, onToggleSelect, onUse, onToggleHidden, onD
       flexDirection: "column",
       transition:    "border-color 0.15s",
     }}>
-      {/* Image area */}
       <div style={{ position: "relative", cursor: anySelected ? "pointer" : (isHidden ? "default" : "zoom-in") }}
         onClick={handleClick}>
         <img
@@ -130,30 +129,28 @@ function AssetCard({ asset, selected, onToggleSelect, onUse, onToggleHidden, onD
             transition: "opacity 0.2s",
           }}
         />
-        {/* Checkbox overlay */}
         <div
           onClick={(e) => { e.stopPropagation(); onToggleSelect(asset.id); }}
           style={{
-            position:      "absolute",
-            top:           6,
-            left:          6,
-            width:         20,
-            height:        20,
-            borderRadius:  4,
-            border:        `2px solid ${selected ? colors.borderFocus : colors.borderStrong}`,
-            background:    selected ? colors.borderFocus : "rgba(0,0,0,0.5)",
-            display:       "flex",
-            alignItems:    "center",
-            justifyContent:"center",
-            cursor:        "pointer",
-            transition:    "all 0.15s",
+            position:       "absolute",
+            top:            6,
+            left:           6,
+            width:          20,
+            height:         20,
+            borderRadius:   4,
+            border:         `2px solid ${selected ? colors.borderFocus : colors.borderStrong}`,
+            background:     selected ? colors.borderFocus : "rgba(0,0,0,0.5)",
+            display:        "flex",
+            alignItems:     "center",
+            justifyContent: "center",
+            cursor:         "pointer",
+            transition:     "all 0.15s",
           }}
         >
           {selected && <span style={{ color: "#fff", fontSize: 12, lineHeight: 1, fontWeight: 700 }}>✓</span>}
         </div>
       </div>
 
-      {/* Footer */}
       <div style={{ padding: "8px 8px", display: "flex", gap: 4, alignItems: "center" }}>
         <button
           onClick={() => onUse(asset)}
@@ -175,63 +172,28 @@ function AssetCard({ asset, selected, onToggleSelect, onUse, onToggleHidden, onD
 // ─── AssetsPage ───────────────────────────────────────────────────────────────
 
 export function AssetsPage({ toast, onAddReference }) {
-  // Navigation
-  const [view,          setView]          = useState("folder");   // "folders" | "folder"
-  const [currentFolder, setCurrentFolder] = useState("assets");
-  const [folders,       setFolders]       = useState([]);
+  const { folders, selectedFolder, assets, loading, uploading, page, total, showHidden } =
+    AssetStore.useState();
 
-  // Asset list
-  const [assets,      setAssets]      = useState([]);
-  const [loading,     setLoading]     = useState(true);
-  const [uploading,   setUploading]   = useState(false);
-  const [showHidden,  setShowHidden]  = useState(false);
-  const [showAll,     setShowAll]     = useState(false);
-  const [lightboxSrc, setLightboxSrc] = useState(null);
+  const totalPages = Math.ceil(total / 40) || 1;
 
-  // Pagination
-  const [page,       setPage]       = useState(1);
-  const [pageSize]                  = useState(30);
-  const [total,      setTotal]      = useState(0);
-  const [totalPages, setTotalPages] = useState(1);
-
-  // Multi-select + move
+  // Local UI state only
+  const [view,          setView]          = useState("folder");
+  const [showAll,       setShowAll]       = useState(false);
+  const [lightboxSrc,   setLightboxSrc]   = useState(null);
   const [selected,      setSelected]      = useState(new Set());
   const [moveOpen,      setMoveOpen]      = useState(false);
   const [newFolderMode, setNewFolderMode] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
 
-  // ── Loaders ────────────────────────────────────────────────────────────────
+  const currentFolder = selectedFolder ?? "assets";
 
-  const loadFolders = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await api.get("/assets/folders");
-      if (res.ok) setFolders(res.folders);
-    } catch {
-      toast.add("Failed to load folders", "error");
-    }
-    setLoading(false);
-  }, [toast]);
-
-  const loadAssets = useCallback(async (p = 1, folder = currentFolder, hidden = showHidden) => {
-    setLoading(true);
-    try {
-      const hiddenParam = hidden ? "" : "&hidden=false";
-      const res = await api.get(`/assets?page=${p}&pageSize=${pageSize}&folder=${encodeURIComponent(folder)}${hiddenParam}`);
-      if (res.ok) {
-        setAssets(res.assets);
-        setTotal(res.total ?? 0);
-        setTotalPages(res.totalPages ?? 1);
-        setPage(p);
-      }
-    } catch {
-      toast.add("Failed to load assets", "error");
-    }
-    setLoading(false);
-  }, [toast, pageSize, currentFolder, showHidden]);
-
-  // Initial load
-  useEffect(() => { loadAssets(1); }, [loadAssets]);
+  useEffect(() => {
+    AssetStore.actions.LOAD_FOLDERS();
+    if (!selectedFolder) AssetStore.actions.SET_FOLDER("assets");
+    AssetStore.actions.LOAD_ASSETS({ folder: selectedFolder ?? "assets" });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Navigation ─────────────────────────────────────────────────────────────
 
@@ -239,17 +201,20 @@ export function AssetsPage({ toast, onAddReference }) {
     setView("folders");
     setSelected(new Set());
     setMoveOpen(false);
-    loadFolders();
+    AssetStore.actions.LOAD_FOLDERS();
   };
 
   const openFolder = (name) => {
-    setCurrentFolder(name);
-    setView("folder");
     setSelected(new Set());
-    setPage(1);
-    setShowHidden(false);
-    loadAssets(1, name, false);
+    setShowAll(false);
+    setView("folder");
+    AssetStore.actions.SET_FOLDER(name);
+    AssetStore.actions.LOAD_ASSETS({ folder: name, showHidden: false });
   };
+
+  const reload = useCallback((p = 1) => {
+    AssetStore.actions.LOAD_ASSETS({ folder: currentFolder, page: p, showHidden });
+  }, [currentFolder, showHidden]);
 
   // ── Selection ──────────────────────────────────────────────────────────────
 
@@ -261,21 +226,21 @@ export function AssetsPage({ toast, onAddReference }) {
     });
   };
 
-  const selectAll = () => setSelected(new Set(assets.map((a) => a.id)));
+  const selectAll     = () => setSelected(new Set(assets.map((a) => a.id)));
   const clearSelection = () => { setSelected(new Set()); setMoveOpen(false); };
 
-  // ── Move ───────────────────────────────────────────────────────────────────
+  // ── Write operations (local api + sync store) ──────────────────────────────
 
   const handleMove = async (targetFolder) => {
     setMoveOpen(false);
     if (!selected.size) return;
     try {
-      const res = await api.post("/assets/move", { ids: [...selected], folder: targetFolder });
-      if (res.ok) {
-        toast.add(`Moved ${res.moved} asset${res.moved !== 1 ? "s" : ""} to "${targetFolder}"`, "success");
+      const res = await AssetStore.actions.MOVE_ASSETS({ ids: [...selected], folder: targetFolder });
+      
+      // If successfully moved assets
+      if (res?.ok) {
+        toast.add(`Moved asset to "${targetFolder}"`, "success");
         clearSelection();
-        loadAssets(1, currentFolder, showHidden);
-        loadFolders();
       } else {
         toast.add(res.error || "Move failed", "error");
       }
@@ -284,13 +249,11 @@ export function AssetsPage({ toast, onAddReference }) {
     }
   };
 
-  // ── Asset actions ──────────────────────────────────────────────────────────
-
   const handleToggleHidden = async (asset) => {
     try {
-      const res = await api.patch(`/assets/${asset.id}`, { hidden: !asset.hidden });
-      if (!res.ok) { toast.add(res.error || "Update failed", "error"); return; }
-      setAssets((prev) => prev.map((a) => a.id === asset.id ? { ...a, hidden: !asset.hidden } : a));
+      const res = await AssetStore.actions.TOGGLE_HIDDEN(asset)
+      if (!res?.ok) { toast.add(res.error || "Update failed", "error"); return; }
+      AssetStore.actions.UPDATE_ASSET({ id: asset.id, hidden: !asset.hidden });
     } catch {
       toast.add("Network error", "error");
     }
@@ -298,48 +261,48 @@ export function AssetsPage({ toast, onAddReference }) {
 
   const handleDelete = async (asset) => {
     try {
-      const res = await api.delete(`/assets/${asset.id}`);
-      if (!res.ok) { toast.add(res.error || "Delete failed", "error"); return; }
-      toast.add("Asset deleted", "success");
-      setSelected((prev) => { const next = new Set(prev); next.delete(asset.id); return next; });
-      const nextPage = assets.length === 1 && page > 1 ? page - 1 : page;
-      loadAssets(nextPage, currentFolder, showHidden);
-      loadFolders();
-    } catch {
+      const res = await AssetStore.actions.DELETE_ASSET(asset.id);
+        if (!res?.ok) { 
+          toast.add(res?.diffuse?.error || "Delete failed", "error"); 
+          return; 
+        } else {
+        toast.add("Asset deleted", "success");
+        setSelected((prev) => { const next = new Set(prev); next.delete(asset.id); return next; });
+      }
+    } catch (err) {
+      console.log(err)
       toast.add("Network error", "error");
     }
   };
 
   const handleUpload = async (files) => {
-    setUploading(true);
     try {
       const images = await Promise.all(files.map(fileToBase64));
-      const res = await api.post("/assets", { images, folder: currentFolder });
+      const res = await AssetStore.actions.UPLOAD_ASSETS({ images, folder: currentFolder });
+      
       if (res.ok) {
-        toast.add(`${res.assets.length} asset${res.assets.length !== 1 ? "s" : ""} uploaded`, "success");
-        loadAssets(1, currentFolder, showHidden);
-        loadFolders();
+        toast.add(`Assets Uploaded`, "success");
       } else {
         toast.add(res.error || "Upload failed", "error");
       }
     } catch {
       toast.add("Upload failed", "error");
     }
-    setUploading(false);
   };
-
-  // ── Folder management ──────────────────────────────────────────────────────
 
   const handleCreateFolder = async () => {
     const name = newFolderName.trim().toLowerCase();
     if (!name) return;
+    
     try {
-      const res = await api.post("/assets/folders", { name });
+      // Create folder
+      const res = await AssetStore.actions.CREATE_FOLDER({name})
+      console.log(res)
+      // If ok
       if (res.ok) {
         toast.add(`Folder "${name}" created`, "success");
         setNewFolderMode(false);
         setNewFolderName("");
-        loadFolders();
       } else {
         toast.add(res.error || "Failed to create folder", "error");
       }
@@ -350,11 +313,14 @@ export function AssetsPage({ toast, onAddReference }) {
 
   const handleDeleteFolder = async (name) => {
     try {
-      const res = await api.delete(`/assets/folders/${encodeURIComponent(name)}`);
+      // Response
+      const res = await AssetStore.actions.DELETE_FOLDER(name)
+      
+      // If ok
       if (res.ok) {
         toast.add(`Folder "${name}" deleted`, "success");
-        loadFolders();
-      } else {
+      } 
+      else {
         toast.add(res.error || "Failed to delete folder", "error");
       }
     } catch {
@@ -362,25 +328,12 @@ export function AssetsPage({ toast, onAddReference }) {
     }
   };
 
+  // ── Styles ─────────────────────────────────────────────────────────────────
+
+  const sharedHeader = { display: "flex", alignItems: "center", gap: 12, marginBottom: 20 };
+  const headerBtn    = { padding: "4px 12px", background: "transparent", border: `1px solid ${colors.border}`, borderRadius: 6, color: colors.textMuted, fontFamily: font.mono, fontSize: 11, cursor: "pointer" };
+
   // ── Render: folders view ───────────────────────────────────────────────────
-
-  const sharedHeader = {
-    display:    "flex",
-    alignItems: "center",
-    gap:        12,
-    marginBottom: 20,
-  };
-
-  const headerBtn = {
-    padding:      "4px 12px",
-    background:   "transparent",
-    border:       `1px solid ${colors.border}`,
-    borderRadius: 6,
-    color:        colors.textMuted,
-    fontFamily:   font.mono,
-    fontSize:     11,
-    cursor:       "pointer",
-  };
 
   if (view === "folders") {
     return (
@@ -423,18 +376,7 @@ export function AssetsPage({ toast, onAddReference }) {
               <div
                 key={folder.name}
                 onClick={() => openFolder(folder.name)}
-                style={{
-                  background:    colors.surface,
-                  border:        `1px solid ${colors.border}`,
-                  borderRadius:  10,
-                  padding:       "20px 16px",
-                  cursor:        "pointer",
-                  display:       "flex",
-                  flexDirection: "column",
-                  gap:           10,
-                  transition:    "border-color 0.15s",
-                  position:      "relative",
-                }}
+                style={{ background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: 10, padding: "20px 16px", cursor: "pointer", display: "flex", flexDirection: "column", gap: 10, transition: "border-color 0.15s", position: "relative" }}
                 onMouseEnter={(e) => e.currentTarget.style.borderColor = colors.borderStrong}
                 onMouseLeave={(e) => e.currentTarget.style.borderColor = colors.border}
               >
@@ -463,14 +405,13 @@ export function AssetsPage({ toast, onAddReference }) {
 
   // ── Render: folder contents view ───────────────────────────────────────────
 
-  const showUpload = !["generated", "upscaled"].includes(currentFolder);
+  const showUpload   = !["generated", "upscaled"].includes(currentFolder);
   const otherFolders = folders.filter((f) => f.name !== currentFolder);
 
   return (
     <div style={{ padding: "32px 28px", maxWidth: 1400, margin: "0 auto" }}>
       {lightboxSrc && <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />}
 
-      {/* Header */}
       <div style={{ ...sharedHeader, flexWrap: "wrap" }}>
         <button onClick={openFolders} style={{ ...headerBtn, display: "flex", alignItems: "center", gap: 4 }}>
           ← Back
@@ -481,7 +422,6 @@ export function AssetsPage({ toast, onAddReference }) {
         <span style={{ fontFamily: font.mono, fontSize: 11, color: colors.textMuted }}>{total}</span>
         <div style={{ flex: 1 }} />
 
-        {/* Selection toolbar */}
         {selected.size > 0 && (
           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
             <span style={{ fontFamily: font.mono, fontSize: 11, color: colors.textMuted }}>{selected.size} selected</span>
@@ -493,17 +433,7 @@ export function AssetsPage({ toast, onAddReference }) {
                 Move to ▾
               </button>
               {moveOpen && (
-                <div style={{
-                  position:   "absolute",
-                  top:        "calc(100% + 4px)",
-                  right:      0,
-                  background: colors.surface,
-                  border:     `1px solid ${colors.borderMid}`,
-                  borderRadius: 6,
-                  zIndex:     200,
-                  minWidth:   140,
-                  overflow:   "hidden",
-                }}>
+                <div style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, background: colors.surface, border: `1px solid ${colors.borderMid}`, borderRadius: 6, zIndex: 200, minWidth: 140, overflow: "hidden" }}>
                   {otherFolders.map((f) => (
                     <button
                       key={f.name}
@@ -521,34 +451,27 @@ export function AssetsPage({ toast, onAddReference }) {
                 </div>
               )}
             </div>
-            <button onClick={selectAll}  style={headerBtn}>Select all</button>
+            <button onClick={selectAll}    style={headerBtn}>Select all</button>
             <button onClick={clearSelection} style={headerBtn}>Clear</button>
           </div>
         )}
 
         {selected.size === 0 && (
           <>
-            {
-              showHidden === true && 
-                <button
-                  onClick={() => {setShowAll((v) => !v);}}
-                  style={{
-                    float: "right",
-                    padding:      "4px 12px",
-                    background:   showAll ? colors.borderMid : "transparent",
-                    border:       `1px solid ${colors.border}`,
-                    borderRadius: 6,
-                    color:        colors.textMuted,
-                    fontFamily:   font.mono,
-                    fontSize:     11,
-                    cursor:       "pointer",
-                  }}
-                >
-                  {showAll ? "Hide all" : "Show all"}
-                </button>
-            }
+            {showHidden && (
+              <button
+                onClick={() => setShowAll((v) => !v)}
+                style={{ padding: "4px 12px", background: showAll ? colors.borderMid : "transparent", border: `1px solid ${colors.border}`, borderRadius: 6, color: colors.textMuted, fontFamily: font.mono, fontSize: 11, cursor: "pointer" }}
+              >
+                {showAll ? "Hide all" : "Show all"}
+              </button>
+            )}
             <button
-              onClick={() => { const next = !showHidden; setShowHidden(next); loadAssets(1, currentFolder, next); }}
+              onClick={() => {
+                const next = !showHidden;
+                AssetStore.actions.SET_SHOW_HIDDEN(next);
+                AssetStore.actions.LOAD_ASSETS({ folder: currentFolder, showHidden: next });
+              }}
               style={{ ...headerBtn, background: showHidden ? colors.borderMid : "transparent" }}
             >
               {showHidden ? "Hide hidden" : "Show hidden"}
@@ -585,7 +508,7 @@ export function AssetsPage({ toast, onAddReference }) {
               />
             ))}
           </div>
-          <Pagination page={page} totalPages={totalPages} onPage={(p) => loadAssets(p, currentFolder, showHidden)} />
+          <Pagination page={page} totalPages={totalPages} onPage={(p) => AssetStore.actions.LOAD_ASSETS({ folder: currentFolder, page: p, showHidden })} />
         </>
       )}
     </div>

@@ -98,9 +98,9 @@ async function healTagAssets(tags) {
 
   const fetched  = allIds.length ? await db.assets.getAssetsByIds(allIds) : [];
   const byId     = {};
-  await Promise.all(fetched.map(async (asset) => {
+  for (const asset of fetched) {
     byId[asset.id] = await healAsset(asset);
-  }));
+  }
 
   const healedNew = newFormat.map((tag) => {
     const assets = {};
@@ -111,14 +111,17 @@ async function healTagAssets(tags) {
   });
 
   // ── Old embedded format: heal in place ────────────────────────────────────
-  const healedOld = await Promise.all(oldFormat.map(async (tag) => {
+  const healedOld = [];
+  for (const tag of oldFormat) {
     const assets = {};
     for (const group of Object.keys(tag.assets || {})) {
       const originals = Array.isArray(tag.assets[group]) ? tag.assets[group] : [];
-      assets[group] = (await Promise.all(originals.map(healAsset))).filter(Boolean);
+      const healed = [];
+      for (const asset of originals) healed.push(await healAsset(asset));
+      assets[group] = healed.filter(Boolean);
     }
-    return { ...tag, assets };
-  }));
+    healedOld.push({ ...tag, assets });
+  }
 
   // Restore original order
   const newByKey = Object.fromEntries(healedNew.map((t) => [t.key, t]));
@@ -142,13 +145,17 @@ async function healTagAssets(tags) {
 async function healReferenceItems(items) {
   if (!items.length) return items;
 
-  return Promise.all(items.map(async (item) => {
+  const results = [];
+  for (const item of items) {
     const asset = await db.assets.getAssetByUrl(item.url);
-    if (!asset) return { url: item.url, purpose: item.purpose };
+    if (!asset) { results.push({ url: item.url, purpose: item.purpose }); continue; }
     const healed = await healAsset(asset);
-    if (healed) return { id: healed.id, url: healed.url, purpose: item.purpose };
-    return { url: item.url, purpose: item.purpose };
-  }));
+    results.push(healed
+      ? { id: healed.id, url: healed.url, purpose: item.purpose }
+      : { url: item.url, purpose: item.purpose }
+    );
+  }
+  return results;
 }
 
 /**

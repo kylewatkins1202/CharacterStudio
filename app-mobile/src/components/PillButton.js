@@ -8,7 +8,8 @@ import { AppStore } from "../stores/AppStore";
 import { radius } from "../lib/theme";
 
 export default function PillButton({ label, active, onPress, style, textStyle }) {
-  const colors = getTheme(AppStore.useState().theme);
+  const {theme} = AppStore.useState()
+  const colors = getTheme();
   return (
     <TouchableOpacity
       onPress={onPress}

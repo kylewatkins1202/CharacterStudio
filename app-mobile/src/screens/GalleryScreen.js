@@ -275,7 +275,8 @@ function EntryModal({ entry, colors, insets, onClose, navigation }) {
 
 export default function GalleryScreen({ navigation }) {
   const insets     = useSafeAreaInsets();
-  const colors     = getTheme(AppStore.useState().theme);
+  const theme = AppStore.useState().theme
+  const colors     = getTheme(theme);
   const gallState  = GalleryStore.useState();
   const toast      = useToast();
 

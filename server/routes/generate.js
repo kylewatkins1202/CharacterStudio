@@ -272,28 +272,28 @@ router.post("/image", async (req, res) => {
 
     // 2. Base64 uploads — new photos: upload, save locally, create asset record
     const rawReferenceImages = Array.isArray(req.body.referenceImages) ? req.body.referenceImages : [];
-    const base64Items = await Promise.all(
-      rawReferenceImages.map(async (item, i) => {
-        const b64      = typeof item === "string" ? item : item.data;
-        const purpose  = (typeof item === "object" && item.purpose) ? item.purpose : "";
-        const parsed   = parseBase64Image(b64);
-        const filename = `ref-${Date.now()}-${i}.${parsed.ext}`;
-        const uploaded = await wavespeed.uploadBufferToWaveSpeed(parsed.buffer, filename, parsed.mimeType);
-        const { localPath, assetPath } = await saveToFolder("assets", filename, parsed.buffer);
-        const asset = await db.assets.createAsset({
-          id:        crypto.randomUUID(),
-          url:       uploaded.url,
-          localPath,
-          assetPath,
-          filename,
-          mimeType:  parsed.mimeType,
-          purpose,
-          hidden:    false,
-          timestamp: new Date().toISOString(),
-        });
-        return { id: asset.id, url: uploaded.url, purpose };
-      })
-    );
+    const base64Items = [];
+    for (let i = 0; i < rawReferenceImages.length; i++) {
+      const item     = rawReferenceImages[i];
+      const b64      = typeof item === "string" ? item : item.data;
+      const purpose  = (typeof item === "object" && item.purpose) ? item.purpose : "";
+      const parsed   = parseBase64Image(b64);
+      const filename = `ref-${Date.now()}-${i}.${parsed.ext}`;
+      const uploaded = await wavespeed.uploadBufferToWaveSpeed(parsed.buffer, filename, parsed.mimeType);
+      const { localPath, assetPath } = await saveToFolder("assets", filename, parsed.buffer);
+      const asset = await db.assets.createAsset({
+        id:        crypto.randomUUID(),
+        url:       uploaded.url,
+        localPath,
+        assetPath,
+        filename,
+        mimeType:  parsed.mimeType,
+        purpose,
+        hidden:    false,
+        timestamp: new Date().toISOString(),
+      });
+      base64Items.push({ id: asset.id, url: uploaded.url, purpose });
+    }
 
     // 3. Pasted URL refs — heal if a known asset, use as-is otherwise (no new asset)
     const rawReferenceUrls = Array.isArray(req.body.referenceImageUrls) ? req.body.referenceImageUrls : [];
@@ -416,10 +416,11 @@ router.post("/image", async (req, res) => {
               const buffer      = Buffer.from(await imgRes.arrayBuffer());
               const contentType = imgRes.headers.get("content-type") || "image/jpeg";
               const ext         = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
-              const filename    = `generated-${Date.now()}.${ext}`;
+              const uuid = crypto.randomUUID()
+              const filename    = `generated-${uuid}.${ext}`;
               const { localPath, assetPath } = await saveToFolder("generated", filename, buffer);
               const imageAsset = await db.assets.createAsset({
-                id:        crypto.randomUUID(),
+                id:        uuid,
                 url:       imageUrl,
                 localPath,
                 assetPath,

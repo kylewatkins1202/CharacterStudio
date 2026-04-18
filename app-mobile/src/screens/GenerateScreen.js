@@ -24,6 +24,7 @@ function SectionLabel({ children, colors }) {
 }
 
 function ModeToggle({ mode, colors }) {
+  const {localGenerationEnabled} = AppStore.useState()
   return (
     <View style={styles.row}>
       <TouchableOpacity
@@ -34,7 +35,7 @@ function ModeToggle({ mode, colors }) {
           WaveSpeed
         </Text>
       </TouchableOpacity>
-      {AppStore.useState().localGenerationEnabled && (
+      { localGenerationEnabled && (
         <TouchableOpacity
           onPress={() => GenerateStore.actions.SET_MODE("local")}
           style={[styles.modeBtn, { backgroundColor: mode === "local" ? colors.primary : "#111", borderRadius: radius.md }]}

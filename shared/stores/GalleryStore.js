@@ -14,19 +14,29 @@ const GalleryReducer = createReducer({
   },
 
   actions: {
-    LOAD_PAGE: async ({ state, payload }, { SUCCESS, FAIL }) => {
+    LOAD_PAGE: async ({ state, payload }, { SUCCESS, FAIL, LOADING }) => {
       const page       = payload?.page       ?? state.page;
       const showHidden = payload?.showHidden  ?? state.showHidden;
+      const replace = payload?.replace ?? false
       const pageSize   = state.pageSize;
 
-      SUCCESS({ loading: true });
+      LOADING({ loading: true });
 
       try {
         const hiddenParam = showHidden ? "" : "&hidden=false";
         const res = await getApi().get(`/gallery?page=${page}&pageSize=${pageSize}${hiddenParam}`);
         if (res.ok) {
+          let entries = []
+
+          if (replace) {
+            entries = res.entries
+          } 
+          else {
+            entries = page === 1 ? res.entries : [...state.entries, ...res.entries]
+          }
+
           SUCCESS({
-            entries:    page === 1 ? res.entries : [...state.entries, ...res.entries],
+            entries:    entries,
             page:       res.page,
             total:      res.total ?? 0,
             totalPages: res.totalPages ?? 1,
@@ -44,9 +54,25 @@ const GalleryReducer = createReducer({
     SET_LOADING:     ({ payload }) => ({ loading: payload }),
     SET_SHOW_HIDDEN: ({ payload }) => ({ showHidden: payload }),
 
-    UPDATE_ENTRY: ({ state, payload }) => ({
-      entries: state.entries.map((e) => (e.id === payload.id ? { ...e, ...payload } : e)),
-    }),
+    UPDATE_HIDDEN: async ({state, payload}, {SUCCESS, FAIL}) => {
+      const {entry, hidden} = payload || {}
+
+      const url = entry.imageAssetId
+        ? `/assets/${entry.imageAssetId}`
+        : `/gallery/${entry.id}`
+      
+      const res = await getApi().patch(url, { hidden: hidden });
+
+      return ({
+        entries: state.entries.map((e) => (e.id === payload.id ? { ...e, ...payload } : e)),
+      })
+    },
+
+    UPDATE_ENTRY: ({ state, payload }) => {
+      return ({
+        entries: state.entries.map((e) => (e.id === payload.id ? { ...e, ...payload } : e)),
+      })
+    },
 
     PREPEND_ENTRY: ({ state, payload }) => ({
       entries: [payload, ...state.entries],
@@ -62,15 +88,15 @@ const GalleryReducer = createReducer({
       try {
         const res = await getApi().delete(`/gallery/${id}`);
         if (res.ok) {
-          SUCCESS({
+          return SUCCESS({
             entries: state.entries.filter((e) => e.id !== id),
             total:   Math.max(0, state.total - 1),
-          });
+          })
         } else {
-          FAIL({ error: res.error || "Delete failed" });
+          return FAIL({ error: res.error || "Delete failed" });
         }
       } catch (e) {
-        FAIL({ error: e.message });
+        return FAIL({ error: e.message });
       }
     },
 

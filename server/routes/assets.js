@@ -127,15 +127,16 @@ router.post("/assets/move", async (req, res) => {
     // Ensure target folder dir exists
     await fsp.mkdir(path.join(db.ASSETS_DIR, folder), { recursive: true });
 
-    const results = await Promise.all(ids.map(async (id) => {
+    const results = [];
+    for (const id of ids) {
       const asset = await db.assets.getAsset(id);
-      if (!asset) return { id, ok: false, error: "not found" };
-      if (!asset.assetPath) return { id, ok: false, error: "no local file" };
+      if (!asset) { results.push({ id, ok: false, error: "not found" }); continue; }
+      if (!asset.assetPath) { results.push({ id, ok: false, error: "no local file" }); continue; }
 
-      const filename  = asset.assetPath.split("/").pop();
-      const oldAbs    = path.join(db.ASSETS_DIR, ...asset.assetPath.split("/"));
-      const newAbs    = await resolveTargetPath(folder, filename);
-      const newFile   = path.basename(newAbs);
+      const filename     = asset.assetPath.split("/").pop();
+      const oldAbs       = path.join(db.ASSETS_DIR, ...asset.assetPath.split("/"));
+      const newAbs       = await resolveTargetPath(folder, filename);
+      const newFile      = path.basename(newAbs);
       const newAssetPath = `${folder}/${newFile}`;
 
       try {
@@ -147,8 +148,8 @@ router.post("/assets/move", async (req, res) => {
       }
 
       await db.assets.updateAsset(id, { assetPath: newAssetPath, localPath: newAbs });
-      return { id, ok: true };
-    }));
+      results.push({ id, ok: true });
+    }
 
     const moved  = results.filter((r) => r.ok).length;
     const errors = results.filter((r) => !r.ok);
@@ -201,24 +202,24 @@ router.post("/assets", async (req, res) => {
     const targetFolder = String(req.body.folder || "assets").trim() || "assets";
     if (!rawImages.length) return res.status(400).json({ error: "images array is required" });
 
-    const created = await Promise.all(
-      rawImages.map(async (b64, i) => {
-        const parsed   = parseBase64Image(b64);
-        const filename = `asset-${Date.now()}-${i}.${parsed.ext}`;
-        const uploaded = await uploadBufferToWaveSpeed(parsed.buffer, filename, parsed.mimeType);
-        const { localPath, assetPath } = await saveToFolder(targetFolder, filename, parsed.buffer);
-        return db.assets.createAsset({
-          id:        crypto.randomUUID(),
-          url:       uploaded.url,
-          localPath,
-          assetPath,
-          filename,
-          mimeType:  parsed.mimeType,
-          hidden:    false,
-          timestamp: new Date().toISOString(),
-        });
-      })
-    );
+    const created = [];
+    for (let i = 0; i < rawImages.length; i++) {
+      const parsed   = parseBase64Image(rawImages[i]);
+      const filename = `asset-${Date.now()}-${i}.${parsed.ext}`;
+      const uploaded = await uploadBufferToWaveSpeed(parsed.buffer, filename, parsed.mimeType);
+      const { localPath, assetPath } = await saveToFolder(targetFolder, filename, parsed.buffer);
+      const asset = await db.assets.createAsset({
+        id:        crypto.randomUUID(),
+        url:       uploaded.url,
+        localPath,
+        assetPath,
+        filename,
+        mimeType:  parsed.mimeType,
+        hidden:    false,
+        timestamp: new Date().toISOString(),
+      });
+      created.push(asset);
+    }
 
     res.json({ ok: true, assets: created });
   } catch (error) {
@@ -262,25 +263,22 @@ router.delete("/assets/:id", async (req, res) => {
 
     // Remove the asset ID from any tag that references it
     const allTags = await db.tags.searchTags("");
-    await Promise.all(
-      allTags
-        .filter((tag) => tag.assetIds && Object.values(tag.assetIds).flat().includes(req.params.id))
-        .map((tag) =>
-          db.tags.updateTag(tag.key, (t) => {
-            for (const group of Object.keys(t.assetIds || {})) {
-              t.assetIds[group] = (t.assetIds[group] || []).filter((id) => id !== req.params.id);
-            }
-            return t;
-          })
-        )
+    const referencingTags = allTags.filter(
+      (tag) => tag.assetIds && Object.values(tag.assetIds).flat().includes(req.params.id)
     );
+    for (const tag of referencingTags) {
+      await db.tags.updateTag(tag.key, (t) => {
+        for (const group of Object.keys(t.assetIds || {})) {
+          t.assetIds[group] = (t.assetIds[group] || []).filter((id) => id !== req.params.id);
+        }
+        return t;
+      });
+    }
 
     const galleryEntries = await db.gallery.getGalleryEntries();
-    await Promise.all(
-      galleryEntries
-        .filter((entry) => entry.imageAssetId === req.params.id)
-        .map((entry) => db.gallery.deleteGalleryEntry(entry.id))
-    );
+    for (const entry of galleryEntries.filter((e) => e.imageAssetId === req.params.id)) {
+      await db.gallery.deleteGalleryEntry(entry.id);
+    }
 
     res.json({ ok: true, deleted: req.params.id });
   } catch (error) {
