@@ -166,20 +166,30 @@ const GenerateReducer = createReducer({
       }
     },
 
-    GENERATE: async ({ state }, { SUCCESS, FAIL, LOADING }) => {
+    GENERATE: async ({ state }, { SUCCESS, FAIL, LOADING, LOAD_WS_MODELS }) => {
       LOADING();
       const {
         prompt, negPrompt, mode, referenceImages,
-        cloudModel, cloudModelParams, wsModels,
+        cloudModel, cloudModelParams,
         localModel, localSteps, localCfg, localDenoise,
         localLoras, localScheduler, localSampler,
         tagOverrides, resetCache, useRawPrompt,
       } = state;
 
-      const modelSchema  = wsModels?.[cloudModel];
-      const usesEnumSize = (wsModels[cloudModel]?.baseProperites?.resolution && wsModels[cloudModel]?.baseProperites?.aspectRatios);
-      const computedSize = computeSize(cloudModelParams.aspect_ratio, cloudModelParams.baseSize);
+      let wsModels
 
+      // Wavespeed models empty
+      if (Object.keys(state.wsModels).length === 0) {
+        wsModels = await (LOAD_WS_MODELS()).wsModels
+      }
+      else {
+        wsModels = state.wsModels
+      }
+
+      const modelSchema  = wsModels?.[cloudModel];
+      const usesEnumSize = (wsModels[cloudModel]?.baseProperites?.resolution !== undefined && wsModels[cloudModel]?.baseProperites?.aspect_ratio !== undefined);
+      const computedSize = computeSize(cloudModelParams.aspect_ratio, cloudModelParams.baseSize);
+      console.log(cloudModelParams.aspect_ratio, usesEnumSize)
       const body = {
         prompt,
         negPrompt: negPrompt ?? "",

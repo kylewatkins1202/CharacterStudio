@@ -378,7 +378,7 @@ router.post("/image", async (req, res) => {
             images:             compiled.images,
             prompt:             compiled.rawPrompt,
             size:              modelParams?.size ?? size,
-            aspect_ratio:       modelParams?.aspectRatio ?? aspectRatio,
+            aspect_ratio:       modelParams?.aspect_ratio ?? aspectRatio,
             resolution:      modelParams?.resolution ?? resolution,
             extraParams:        modelParams,
             enableSyncMode:     false,
