@@ -101,7 +101,7 @@ function UrlReferenceInput({ onAdd }) {
  *   noPurpose?: boolean - if true, hides the purpose selector UI and doesn't set purpose on images
  * }} props
  */
-export function ReferenceImageInput({ images, onChange, maxImages, noPurpose = false}) {
+export function ReferenceImageInput({ images = [], onChange, maxImages, noPurpose = false}) {
   const inputRef      = useRef();
   const [dragging,    setDragging]    = useState(false);
   const [showPicker,  setShowPicker]  = useState(false);
@@ -119,11 +119,11 @@ export function ReferenceImageInput({ images, onChange, maxImages, noPurpose = f
       const arr = [...p];
       const [moved] = arr.splice(dragIdx.current, 1);
       arr.splice(i, 0, moved);
+      console.log('drop')
       return arr;
     });
     dragIdx.current = null;
   }, [onChange]);
-
   const existingAssetIds = images.filter((i) => i.assetId).map((i) => i.assetId);
   const atLimit = maxImages != null && images.length >= maxImages;
 

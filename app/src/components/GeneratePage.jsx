@@ -201,7 +201,7 @@ export function GeneratePage({ toast, localGenerationEnabled }) {
           </label>
           <ReferenceImageInput
             images={referenceImages}
-            onChange={(v) => GenerateStore.actions.SET_REFERENCE_IMAGES(v)}
+            onChange={(f) => !f ? null : GenerateStore.actions.SET_REFERENCE_IMAGES(f(referenceImages))}
             maxImages={maxReferenceImages}
           />
         </div>

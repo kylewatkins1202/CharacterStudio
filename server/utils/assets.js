@@ -50,6 +50,11 @@ async function saveAssetLocally(tagKey, group, filename, buffer) {
 }
 
 // ─── Healing ─────────────────────────────────────────────────────────────────
+function localFileExists(asset) {
+  if (!asset?.assetPath) return Promise.resolve(false);
+  const filePath = path.join(db.ASSETS_DIR, ...asset.assetPath.split("/"));
+  return fs.access(filePath).then(() => true, () => false);
+}
 
 /**
  * Attempt to heal a single asset whose CDN URL may have expired.
@@ -62,22 +67,13 @@ async function healAsset(asset) {
   if (!asset?.url) return null;
   if (await isUrlReachable(asset.url)) return asset;
 
-  if (!asset.localPath) {
+  if (!(await localFileExists(asset))) {
     console.warn(`[assets] stale URL with no local copy: ${asset.filename || asset.url}`);
     return null;
   }
 
-  try {
-    const buffer   = await fs.readFile(asset.localPath);
-    const uploaded = await uploadBufferToWaveSpeed(buffer, asset.filename, asset.mimeType);
-    verifiedUrls.add(uploaded.url);
-    console.log(`[assets] re-uploaded ${asset.filename} → ${uploaded.url}`);
-    const healed = await db.assets.updateAsset(asset.id, { url: uploaded.url });
-    return healed || { ...asset, url: uploaded.url };
-  } catch (err) {
-    console.warn(`[assets] failed to re-upload ${asset.filename}: ${err.message}`);
-    return null;
-  }
+  const validLocalUrl = `/api/assets/${asset.id}/file`;
+  return { ...asset, url: validLocalUrl, isLocal: true };
 }
 
 /**

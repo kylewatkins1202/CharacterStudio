@@ -25,7 +25,7 @@ const sharp   = require("sharp");
 const db      = require("../db");
 const { uploadBufferToWaveSpeed } = require("../api/wavespeed");
 const { parseBase64Image }        = require("../utils/imageCollage");
-const { saveToFolder }            = require("../utils/assets");
+const { saveToFolder, healAsset }            = require("../utils/assets");
 
 const router = express.Router();
 
@@ -63,12 +63,32 @@ router.get("/assets", async (req, res) => {
     const filter   = {};
     if (req.query.hidden !== undefined) filter.hidden = req.query.hidden === "true";
     if (req.query.folder !== undefined) filter.folder = req.query.folder;
-    const list  = await db.assets.getAssets(filter);
+    let list  = (await db.assets.getAssets(filter))
+    console.log(list)
+    for (let i = 0; i < list.length; i++) {
+      list[i].url = (await healAsset({...list[i]})).url
+    }
     const total = list.length;
     const slice = list.slice((page - 1) * pageSize, page * pageSize);
     res.json({ ok: true, total, page, pageSize, totalPages: Math.ceil(total / pageSize) || 1, count: slice.length, assets: slice });
   } catch (error) {
     res.status(500).json({ error: "failed to fetch assets", details: error.message });
+  }
+});
+
+// ─── GET /assets/:id/file ────────────────────────────────────────────────────
+
+router.get("/assets/:id/file", async (req, res) => {
+  try {
+    const asset = await db.assets.getAsset(req.params.id);
+    if (!asset?.assetPath) return res.status(404).json({ error: "no local file" });
+    const filePath = path.join(db.ASSETS_DIR, ...asset.assetPath.split("/"));
+    res.set("Cache-Control", "public, max-age=86400");
+    res.sendFile(filePath, (err) => {
+      if (err && !res.headersSent) res.status(404).json({ error: "local file missing" });
+    });
+  } catch (error) {
+    res.status(500).json({ error: "failed to serve file", details: error.message });
   }
 });
 

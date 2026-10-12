@@ -31,6 +31,10 @@ const WAVESPEED_SEEDREAM_EDIT_SEQUENTIAL_URL = `${WAVESPEED_BASE_URL}/bytedance/
 const WAVESPEED_SEEDREAM_5_LITE_URL = `${WAVESPEED_BASE_URL}/bytedance/seedream-v5.0-lite`
 const WAVESPEED_SEEDREAM_5_LITE_EDIT_URL = `${WAVESPEED_BASE_URL}/bytedance/seedream-v5.0-lite/edit`
 
+// Seedream v5 Lite
+const WAVESPEED_SEEDREAM_5_PRO_URL = `${WAVESPEED_BASE_URL}/bytedance/seedream-v5.0-pro`
+const WAVESPEED_SEEDREAM_5_PRO_EDIT_URL = `${WAVESPEED_BASE_URL}/bytedance/seedream-v5.0-pro/edit`
+
 // Qwen Image v2.0
 const WAVESPEED_QWEN_URL = `${WAVESPEED_BASE_URL}/wavespeed-ai/qwen-image-2.0`
 const WAVESPEED_QWEN_EDIT_URL = `${WAVESPEED_BASE_URL}/wavespeed-ai/qwen-image-2.0/edit`
@@ -72,6 +76,16 @@ const MODELS = {
         min: 512,
         max: 8192, 
         poll: true
+    },
+    "seedream5Pro": {
+        modelId: "bytedance/seedream-v5.0-pro",
+        editModelId: "bytedance/seedream-v5.0-pro/edit",
+        name: "Seedream v5 Pro",
+        cost: '.035',
+        link: WAVESPEED_SEEDREAM_5_PRO_URL,
+        editLink: WAVESPEED_SEEDREAM_5_PRO_EDIT_URL,
+        poll: true,
+        schema: 'nano-banana'
     },
     "qwen-image-2.0": {
         modelId: "wavespeed-ai/qwen-image-2.0/text-to-image",

@@ -189,7 +189,7 @@ const GenerateReducer = createReducer({
       const modelSchema  = wsModels?.[cloudModel];
       const usesEnumSize = (wsModels[cloudModel]?.baseProperites?.resolution !== undefined && wsModels[cloudModel]?.baseProperites?.aspect_ratio !== undefined);
       const computedSize = computeSize(cloudModelParams.aspect_ratio, cloudModelParams.baseSize);
-      console.log(cloudModelParams.aspect_ratio, usesEnumSize)
+     
       const body = {
         prompt,
         negPrompt: negPrompt ?? "",
