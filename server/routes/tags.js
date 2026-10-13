@@ -66,7 +66,11 @@ async function populateTag(tag) {
 
   const allIds  = Object.values(tag.assetIds).flat().filter(Boolean);
   const fetched = await db.assets.getAssetsByIds(allIds);
-  const byId    = Object.fromEntries(fetched.map((a) => [a.id, a]));
+  
+  for (let i = 0; i < fetched.length; i++) {
+    fetched[i] = await healAsset(fetched[i])
+  }
+  const byId    = Object.fromEntries(fetched.filter(a => a !== null).map((a) => [a.id, a]));
 
   const assets = {};
   for (const [group, ids] of Object.entries(tag.assetIds)) {

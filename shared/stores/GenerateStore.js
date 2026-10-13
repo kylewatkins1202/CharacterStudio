@@ -189,7 +189,7 @@ const GenerateReducer = createReducer({
       const modelSchema  = wsModels?.[cloudModel];
       const usesEnumSize = (wsModels[cloudModel]?.baseProperites?.resolution !== undefined && wsModels[cloudModel]?.baseProperites?.aspect_ratio !== undefined);
       const computedSize = computeSize(cloudModelParams.aspect_ratio, cloudModelParams.baseSize);
-     
+      
       const body = {
         prompt,
         negPrompt: negPrompt ?? "",
@@ -211,9 +211,11 @@ const GenerateReducer = createReducer({
               : { size: computedSize }),
           },
         }),
-        referenceAssetIds:  referenceImages.filter((i) => i.assetId).map((i) => ({ id: i.assetId, purpose: i.purpose })),
-        referenceImages:    referenceImages.filter((i) => !i.assetId && !i.isUrl).map((i) => ({ data: i.src, purpose: i.purpose })),
-        referenceImageUrls: referenceImages.filter((i) => i.isUrl).map((i) => ({ url: i.url || i.src, purpose: i.purpose })),
+        referenceImages: referenceImages.map((i) => {
+          if (i.assetId) return { id: i.assetId, purpose: i.purpose };
+          if (i.isUrl)   return { url: i.url || i.src, purpose: i.purpose };
+          return { data: i.src, purpose: i.purpose };
+        }),
         tagLocks:     tagOverrides,
         resetCache,
         useRawPrompt: useRawPrompt || false,

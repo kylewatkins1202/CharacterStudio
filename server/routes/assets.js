@@ -64,9 +64,12 @@ router.get("/assets", async (req, res) => {
     if (req.query.hidden !== undefined) filter.hidden = req.query.hidden === "true";
     if (req.query.folder !== undefined) filter.folder = req.query.folder;
     let list  = (await db.assets.getAssets(filter))
-    console.log(list)
+    let finalList
     for (let i = 0; i < list.length; i++) {
-      list[i].url = (await healAsset({...list[i]})).url
+      let healedUrl = (await healAsset({...list[i]}))?.url
+      if (!healedUrl) continue
+
+        list[i].url = healedUrl
     }
     const total = list.length;
     const slice = list.slice((page - 1) * pageSize, page * pageSize);

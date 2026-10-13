@@ -32,7 +32,7 @@
 /** @typedef {import('../types').CompileResult} CompileResult */
 
 const crypto = require("crypto")
-const { createImageGridFromBuffers, assetUrls } = require("./imageCollage")
+const { createImageGridFromBuffers, assetUrls, filePathToDataUri } = require("./imageCollage")
 const wavespeed = require("../api/wavespeed")
 
 /** Maximum number of input images supported by the current Seedream edit flow. */
@@ -1127,7 +1127,7 @@ function buildCharacterDirectiveLabel(character) {
  * }} params
  * @returns {BuildRawPromptResult}
  */
-function buildRawPromptFromPlan({ originalPrompt, parsedPlan, tagMap }) {
+async function buildRawPromptFromPlan({ originalPrompt, parsedPlan, tagMap }) {
     const images = []
     const directives = []
     const sceneLines = []
@@ -1164,7 +1164,7 @@ function buildRawPromptFromPlan({ originalPrompt, parsedPlan, tagMap }) {
         if (assets.face.length) {
             faceStart = imageIndex
             for (const asset of assets.face) {
-                images.push(asset.url)
+                images.push(asset.localPath)
                 imageIndex += 1
             }
             faceEnd = imageIndex - 1
@@ -1172,7 +1172,7 @@ function buildRawPromptFromPlan({ originalPrompt, parsedPlan, tagMap }) {
 
         if (assets.body.length) {
             bodyImageIndex = imageIndex
-            images.push(assets.body[0].url)
+            images.push(assets.body[0].localPath)
             imageIndex += 1
         }
 
@@ -1367,7 +1367,7 @@ async function compilePrompt({
         llmOptions: parserOptions
     })
 
-    const built = buildRawPromptFromPlan({
+    const built = await buildRawPromptFromPlan({
         originalPrompt: prompt,
         parsedPlan,
         tagMap

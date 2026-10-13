@@ -15,7 +15,7 @@
 
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
-  View, Text, FlatList, TouchableOpacity, Image,
+  View, Text, FlatList, TouchableOpacity,
   StyleSheet, Dimensions, ActivityIndicator, Modal, ScrollView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -23,6 +23,7 @@ import { AppStore } from "../stores/AppStore";
 import { getTheme, spacing, radius } from "../lib/theme";
 import { api } from "../lib/api";
 import CSModal from "./Modal";
+import Image from "./Image";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const COLS  = 4;
@@ -189,7 +190,7 @@ export default function AssetPickerModal({ visible, onClose, onSelect, multiple 
                 <TouchableOpacity onPress={() => toggleSelect(item)} activeOpacity={0.75}>
                   <View style={[styles.card, { borderColor: isSelected ? colors.primary : colors.border, borderWidth: isSelected ? 2 : 1 }]}>
                     {url
-                      ? <Image source={{ uri: url }} style={styles.thumb} resizeMode="cover" />
+                      ? <Image src={url} style={styles.thumb} resizeMode="cover" />
                       : <View style={[styles.thumb, { backgroundColor: colors.surfaceSink }]} />
                     }
                     {isSelected && (

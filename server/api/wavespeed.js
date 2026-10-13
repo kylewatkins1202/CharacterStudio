@@ -47,6 +47,10 @@ const WAVESPEED_QWEN_PRO_EDIT_URL = `${WAVESPEED_BASE_URL}/wavespeed-ai/qwen-ima
 const WAVESPEED_NANO_BANANA_PRO_URL = `${WAVESPEED_BASE_URL}/google/nano-banana-pro/text-to-image`
 const WAVESPEED_NANO_BANANA_PRO_EDIT_URL = `${WAVESPEED_BASE_URL}/google/nano-banana-pro/edit`
 
+// Nano Banana 2.1
+const WAVESPEED_NANO_BANANA_2_1_URL = `${WAVESPEED_BASE_URL}/google/nano-banana-2.1/text-to-image`
+const WAVESPEED_NANO_BANANA_2_1_EDIT_URL = `${WAVESPEED_BASE_URL}/google/nano-banana-2.1/edit`
+
 const WAVESPEED_ANY_LLM_URL = `${WAVESPEED_BASE_URL}/wavespeed-ai/any-llm`
 const WAVESPEED_ANY_LLM_VISION_URL = `${WAVESPEED_BASE_URL}/wavespeed-ai/any-llm/vision`
 
@@ -119,6 +123,16 @@ const MODELS = {
         poll:        true,
         schema:      "nano-banana",
     },
+    "nano-banana-2.1": {
+        modelId:     "google/nano-banana-2.1/text-to-image",
+        editModelId: "google/nano-banana-2.1/edit",
+        name:        "Nano Banana 2.1",
+        link:        WAVESPEED_NANO_BANANA_2_1_URL,
+        editLink:    WAVESPEED_NANO_BANANA_2_1_EDIT_URL,
+        cost:        ".14",
+        poll:        true,
+        schema:      "nano-banana-2.1",
+    }
 }
 
 const LLM_MODELS = {

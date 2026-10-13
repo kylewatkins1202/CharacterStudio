@@ -26,10 +26,18 @@ function getTagGroups(type) {
   return ["location"];
 }
 
-function getTagPreview(tag) {
+function getTagPreview(tag, {baseUrl}) {
   if (!tag?.assets) return null;
-  for (const group of Object.values(tag.assets)) {
-    if (group?.length) return group[0].localUrl || group[0].url;
+  
+  for (const [_, group] of Object.entries(tag.assets)) {
+    if (group?.length > 0)  {
+      let preview = ((group?.[0]?.url || group?.[0]?.localUrl))
+      if (preview.startsWith('/api') && baseUrl) {
+        preview = baseUrl + preview
+      } 
+
+      return preview
+    }
   }
   return null;
 }
@@ -43,6 +51,7 @@ function getAllTagAssets(tag) {
 
 function TagFormModal({ existingTag, colors, insets, onClose, onSaved, toast }) {
   const isEdit = !!existingTag;
+  const baseUrl = AppStore.useState().serverUrl
 
   const [type,       setType]       = useState(existingTag?.type || null);
   const [key,        setKey]        = useState(existingTag?.key || "");
@@ -254,10 +263,10 @@ function TagFormModal({ existingTag, colors, insets, onClose, onSaved, toast }) 
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>
                   <View style={{ flexDirection: "row", gap: 8 }}>
                     {pickedAssets[group].map((asset) => {
-                      const url = asset.localUrl || asset.url;
+                      const url =asset.url || asset.localUrl;
                       return (
                         <View key={asset.id} style={{ position: "relative" }}>
-                          <Image source={{ uri: url }} style={{ width: 80, height: 80, borderRadius: radius.md, borderWidth: 1, borderColor: colors.primary }} resizeMode="cover" />
+                          <Image source={{ uri: url.startsWith('/api') ? baseUrl + url : url }} style={{ width: 80, height: 80, borderRadius: radius.md, borderWidth: 1, borderColor: colors.primary }} resizeMode="cover" />
                           <View style={{ position: "absolute", top: 2, left: 4, backgroundColor: "rgba(0,0,0,0.7)", borderRadius: 3, paddingHorizontal: 4, paddingVertical: 1 }}>
                             <Text style={{ color: colors.primary, fontFamily: "Courier New", fontSize: 8 }}>asset</Text>
                           </View>
@@ -331,6 +340,7 @@ function TagDetailModal({ tag: initialTag, colors, insets, onClose, onUpdated, o
   const [editing,     setEditing]     = useState(false);
   const [addingGroup, setAddingGroup] = useState(null); // group currently being picked via asset picker
   const [saving,      setSaving]      = useState(false);
+  const baseUrl = AppStore.useState().serverUrl
 
   // Reload full tag data (with populated assets) on open
   useEffect(() => {
@@ -535,11 +545,11 @@ function TagDetailModal({ tag: initialTag, colors, insets, onClose, onUpdated, o
                   <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                     <View style={{ flexDirection: "row", gap: 8 }}>
                       {groupAssets.map((asset) => {
-                        const url = asset.localUrl || asset.url;
+                        const url = asset.url || asset.localUrl;
                         return (
                           <View key={asset.id} style={{ position: "relative" }}>
                             <Image
-                              source={{ uri: url }}
+                              source={{ uri: url.startsWith('/api') ? (baseUrl + url) : url }}
                               style={{ width: 88, height: 88, borderRadius: radius.md, borderWidth: 1, borderColor: colors.borderMid }}
                               resizeMode="cover"
                             />
@@ -621,7 +631,7 @@ export default function TagsScreen() {
   const [showAll,     setShowAll]     = useState(false);
   const [selectedTag, setSelectedTag] = useState(null);
   const [creating,    setCreating]    = useState(false);
-
+  const baseUrl = AppStore.useState().serverUrl
   useEffect(() => {
     AppStore.actions.LOAD_TAGS({});
   }, []);
@@ -746,7 +756,8 @@ export default function TagsScreen() {
           contentContainerStyle={{ padding: PAD, gap: CARD_GAP, paddingBottom: insets.bottom + 20 }}
           columnWrapperStyle={{ gap: CARD_GAP }}
           renderItem={({ item: tag }) => {
-            const preview    = getTagPreview(tag);
+            let preview    = getTagPreview(tag, {baseUrl: baseUrl});
+          
             const allAssets  = getAllTagAssets(tag);
             const dimmed     = tag.hidden && !showAll;
             return (

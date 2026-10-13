@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import {
   View, Text, TextInput, ScrollView, TouchableOpacity,
-  Image, StyleSheet, KeyboardAvoidingView, Platform,
+  StyleSheet, KeyboardAvoidingView, Platform,
   ActivityIndicator, FlatList,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -14,6 +14,7 @@ import { extractImageUrl } from "../lib/utils";
 import PillButton from "../components/PillButton";
 import { useToast } from "../components/Toast";
 import AssetPickerModal from "../components/AssetPickerModal";
+import Image from "../components/Image";
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -155,6 +156,7 @@ function SizeSlider({ wsModels, cloudModel, cloudModelParams, colors }) {
 
 function ReferenceImages({ referenceImages, colors }) {
   const [assetPickerOpen, setAssetPickerOpen] = useState(false);
+  const baseUrl = AppStore.useState().serverUrl
 
   const pickImage = useCallback(async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -211,7 +213,7 @@ function ReferenceImages({ referenceImages, colors }) {
             <View key={i} style={{ flexDirection: "row", gap: 10, alignItems: "flex-start" }}>
               <View style={{ position: "relative" }}>
                 <Image
-                  source={{ uri: img.url || img.src }}
+                  src={img.url || img.src}
                   style={{ width: 64, height: 64, borderRadius: radius.md }}
                 />
                 <TouchableOpacity
@@ -432,7 +434,7 @@ export default function GenerateScreen({ navigation }) {
         {imageUrl && (
           <View style={{ marginTop: 24 }}>
             <Image
-              source={{ uri: imageUrl }}
+              src={imageUrl}
               style={[styles.resultImage, { borderColor: colors.borderMid }]}
               resizeMode="contain"
             />

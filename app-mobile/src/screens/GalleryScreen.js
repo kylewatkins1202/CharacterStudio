@@ -11,10 +11,9 @@ import { AppStore } from "../stores/AppStore";
 import { getTheme, spacing, radius } from "../lib/theme";
 import { useToast } from "../components/Toast";
 import CSModal from "../components/Modal";
-import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from 'expo-file-system/legacy';
-import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
+import { getApi } from "../../../shared/lib/apiRef";
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const PAD   = spacing.page;
 const THUMB = 400; // fixed square thumbnail size for list layout
@@ -22,10 +21,11 @@ const THUMB = 400; // fixed square thumbnail size for list layout
 // ─── Entry Card (single-column list row) ─────────────────────────────────────
 
 function EntryCard({ entry, colors, showAll, onPress }) {
-  const imgUrl   = entry.imageUrl || entry.localUrl;
+  const imgUrl   = entry.url || entry.imageUrl || entry.localUrl;
   const isHidden = entry.hidden;
   const blurred  = isHidden && !showAll;
-
+  const baseUrl = AppStore.useState().serverUrl
+  
   return (
     <TouchableOpacity onPress={() => onPress(entry)} activeOpacity={0.85}>
       <View style={[styles.card, { backgroundColor: colors.surface, borderColor: isHidden ? colors.borderMid : colors.border }]}>
@@ -44,7 +44,7 @@ function EntryCard({ entry, colors, showAll, onPress }) {
           ) : imgUrl ? (
             <>
               <Image
-                source={{ uri: imgUrl }}
+                source={{ uri: imgUrl.startsWith('/api') ? baseUrl + imgUrl : imgUrl}}
                 style={[StyleSheet.absoluteFill, { opacity: blurred ? 0.08 : 1 }]}
                 resizeMode="cover"
               />
@@ -100,6 +100,7 @@ function EntryCard({ entry, colors, showAll, onPress }) {
 function EntryModal({ entry, colors, insets, onClose, navigation }) {
   const toast  = useToast();
   const imgUrl = entry?.imageUrl || entry?.localUrl;
+  const baseUrl = AppStore.useState().serverUrl
 
   if (!entry) return null;
 
@@ -191,7 +192,7 @@ function EntryModal({ entry, colors, insets, onClose, navigation }) {
           {/* Image */}
           {imgUrl && (
             <Image
-              source={{ uri: imgUrl }}
+              source={{ uri: imgUrl.startsWith('/api') ? baseUrl + imgUrl : imgUrl}}
               style={styles.modalImage}
               resizeMode="contain"
             />
@@ -275,21 +276,20 @@ function EntryModal({ entry, colors, insets, onClose, navigation }) {
 
 export default function GalleryScreen({ navigation }) {
   const insets     = useSafeAreaInsets();
-  const theme = AppStore.useState().theme
+  const {theme, serverUrl} = AppStore.useState()
   const colors     = getTheme(theme);
   const gallState  = GalleryStore.useState();
-  const toast      = useToast();
 
   const [selected,   setSelected]   = useState(null);
   const [showAll,    setShowAll]    = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-
   const { entries, loading, page, totalPages, total, showHidden } = gallState;
 
   // Initial load
   useEffect(() => {
+    if (!serverUrl | !getApi()) return
     GalleryStore.actions.LOAD_PAGE({ page: 1 });
-  }, []);
+  }, [serverUrl]);
 
   // When showAll changes, update the selected entry if open so its blur state refreshes
   // (no fetch needed — showAll is purely local display)

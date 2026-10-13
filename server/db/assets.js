@@ -56,6 +56,12 @@ class AssetsTable extends DbTable {
     return list.sort((a, b) => (b.timestamp || "").localeCompare(a.timestamp || ""));
   }
 
+  async getAssetByUrl(url) {
+    const db = await this.read()
+    let   list = Object.values(db.assets);
+    return list.find((item) => item.assetPath === url) 
+  }
+
   // ─── Folder management ────────────────────────────────────────────────────────
 
   async getUserFolders() {

@@ -22,12 +22,14 @@ const express = require("express");
 const db = require("../db");
 const wavespeed = require("../api/wavespeed");
 const comfyui = require("../api/comfyui")
-const { parseBase64Image } = require("../utils/imageCollage");
+const { parseBase64Image, filePathToDataUri, detectStringType } = require("../utils/imageCollage");
 const { extractTags, compilePrompt } = require("../utils/tagCompiler");
 const { healTagAssets, healReferenceItems, healAsset, saveToFolder } = require("../utils/assets");
 const emitter = require("../utils/sseEmitter");
 const { activeJobs } = require("./events");
 const { populateEntry } = require("./gallery");
+const fs      = require("fs/promises");
+const resolveReferenceImages = require("../utils/assetResolve");
 
 const router = express.Router();
 
@@ -54,7 +56,7 @@ function buildRawCompiled(prompt, tagList) {
       ...(assets.prop     || []),
       ...(assets.outfit   || []),
       ...(assets.location || []),
-    ].map((a) => a.url).filter(Boolean);
+    ].map((a) => a.localPath).filter(Boolean);
 
     if (tagImages.length === 0) continue;
 
@@ -210,34 +212,41 @@ router.post("/image", async (req, res) => {
     const denoise            = req.body.denoise
     const scheduler          = req.body.scheduler
     const sampler            = req.body.sampler
+    const refernceImages     = req.body.refernceImages
 
     if (!prompt) return res.status(400).json({ error: "prompt is required" });
 
     // ── Tag compilation ────────────────────────────────────────────────────
-    let tagList = []
-
     // Get tag keys
     const tagKeys = extractTags(prompt);
     let didCompile = false
     const useVision = false
     let compiled
+
+    // Tag list to populate
+    let tagList = []
+
     // In wavespeed mode
     if (mode === 'wavespeed') {
       // healTagAssets takes raw DB tags (assetIds format), heals + populates them
       tagList = await healTagAssets(await db.tags.getTags(tagKeys));
 
+      // If tag list is not empty
       if (tagList.length > 0) {
+        // If use raw prompt is true
         if (useRawPrompt) {
           // Skip LLM — replace @tags with image[n] references directly
           compiled = buildRawCompiled(prompt, tagList);
         } else {
           const cacheKey = db.cache.makeCacheKey(prompt, tagLocks, tagList);
 
+          // Reset cache
           if (resetCache) {
             await db.cache.deleteCached(cacheKey);
             console.log(`[cache reset] ${cacheKey.slice(0, 12)}…`);
           }
 
+          // Check for compile cache
           compiled = await db.cache.getCached(cacheKey);
 
           if (compiled) {
@@ -256,69 +265,32 @@ router.post("/image", async (req, res) => {
     }
 
     // ── Reference images ───────────────────────────────────────────────────
-
-    // 1. Existing asset ID refs — resolve and heal
-    const rawAssetIdRefs = Array.isArray(req.body.referenceAssetIds) ? req.body.referenceAssetIds : [];
-    const assetIdItems = (await Promise.all(
-      rawAssetIdRefs.map(async (item) => {
-        const assetId = typeof item === "string" ? item : item.id;
-        const purpose = (typeof item === "object" && item.purpose) ? item.purpose : "";
-        const asset   = await db.assets.getAsset(assetId);
-        if (!asset) return null;
-        const healed  = await healAsset(asset);
-        return healed ? { id: healed.id, url: healed.url, purpose } : null;
-      })
-    )).filter(Boolean);
-
-    // 2. Base64 uploads — new photos: upload, save locally, create asset record
-    const rawReferenceImages = Array.isArray(req.body.referenceImages) ? req.body.referenceImages : [];
-    const base64Items = [];
-    for (let i = 0; i < rawReferenceImages.length; i++) {
-      const item     = rawReferenceImages[i];
-      const b64      = typeof item === "string" ? item : item.data;
-      const purpose  = (typeof item === "object" && item.purpose) ? item.purpose : "";
-      const parsed   = parseBase64Image(b64);
-      const filename = `ref-${Date.now()}-${i}.${parsed.ext}`;
-      const uploaded = await wavespeed.uploadBufferToWaveSpeed(parsed.buffer, filename, parsed.mimeType);
-      const { localPath, assetPath } = await saveToFolder("assets", filename, parsed.buffer);
-      const asset = await db.assets.createAsset({
-        id:        crypto.randomUUID(),
-        url:       uploaded.url,
-        localPath,
-        assetPath,
-        filename,
-        mimeType:  parsed.mimeType,
-        purpose,
-        hidden:    false,
-        timestamp: new Date().toISOString(),
-      });
-      base64Items.push({ id: asset.id, url: uploaded.url, purpose });
-    }
-
-    // 3. Pasted URL refs — heal if a known asset, use as-is otherwise (no new asset)
-    const rawReferenceUrls = Array.isArray(req.body.referenceImageUrls) ? req.body.referenceImageUrls : [];
-    const rawUrlItems = rawReferenceUrls.map((item) =>
-      typeof item === "string"
-        ? { url: item, purpose: "" }
-        : { url: item.url, purpose: item.purpose }
-    );
-    const urlItems = await healReferenceItems(rawUrlItems);
-
-    const allReferenceItems     = [...assetIdItems, ...base64Items, ...urlItems];
+    // Resolve all reference images
+    const allReferenceItems     = await resolveReferenceImages(refernceImages)
+    
     // Store { id, purpose } so the gallery can restore generation-time purposes.
     const referenceAssetIds     = allReferenceItems
       .filter((i) => i.id)
       .map((i) => ({ id: i.id, purpose: i.purpose ?? "" }));
-    const uploadedReferenceUrls = allReferenceItems.map((i) => i.url);
-
+    
+    // Get uploaded urls
+    const uploadedReferenceUrls = allReferenceItems.map((i) => i.url || i?.data);
+    
     // ── Prompt assembly ────────────────────────────────────────────────────
     let finalPrompt = compiled?.rawPrompt ?? prompt;
 
+    // If in wavespeed mode and there are reference items
     if (mode === 'wavespeed' && allReferenceItems.length > 0) {
+      // Get character count
       const characterCount = (compiled?.parsedPlan?.characters ?? tagList.filter((t) => t.type === "character")).length;
+      
+      // Get if plural should be true or not
       const isPlural  = characterCount > 1;
+
+      // Base index
       const baseIndex = (compiled?.images ?? []).length;
 
+      // Get ref derivativs and join
       const refDirectives = allReferenceItems.map(({ purpose }, i) => {
         if (purpose === '') return ''
         const n        = baseIndex + i + 1;
@@ -327,6 +299,7 @@ router.post("/image", async (req, res) => {
         return template.replace("{n}", n);
       }).join("\n");
 
+      // Create final prompt
       finalPrompt = `${finalPrompt}\n\n${refDirectives}`;
     }
 
@@ -337,6 +310,25 @@ router.post("/image", async (req, res) => {
     compiled.images.push(...uploadedReferenceUrls);
     compiled.rawPrompt = finalPrompt;
 
+    // For each compiled prompt image
+    for (let i = 0; i < compiled.images.length; i++) {
+      // If is a data value, continue
+      if (compiled.images[i].startsWith('data')) continue
+      
+      // Get string type
+      let type = detectStringType(compiled.images[i])
+      
+      // If string type is file path
+      if (type === 'filepath') {
+        // Get base64String
+        const base64String = await filePathToDataUri(compiled.images[i])
+        
+        // Replace local path with base64 string
+        compiled.images[i] = base64String
+      }
+    }
+
+    // If compile raw failed
     if (!compiled.rawPrompt) {
       throw 'Error with raw prompt'
     }
@@ -373,6 +365,7 @@ router.post("/image", async (req, res) => {
         let result, imageUrl;
 
         if (mode === "wavespeed") {
+          // Generate and poll seedream edit
           result = await wavespeed.generateSeedreamEdit({
             model,
             images:             compiled.images,
@@ -385,11 +378,15 @@ router.post("/image", async (req, res) => {
             enableBase64Output,
           });
 
+          // If failed throw error
           if (result.data?.status === "failed") {
             throw new Error(`WaveSpeed generation failed: ${result.data?.error || "unknown error"}`);
           }
+
+          // Extract image url from result
           imageUrl = extractImageUrlFromResult(result);
         } else {
+          // Generate comfy ui image an poll
           result = await comfyui.generateComfyImage({
             images:    compiled.images,
             prompt:    compiled.rawPrompt,
@@ -403,15 +400,21 @@ router.post("/image", async (req, res) => {
             scheduler: scheduler || "sgm_uniform",
             sampler:   sampler   || "euler",
           });
+
+          // Extract image from result
           imageUrl = extractImageUrlFromResult(result);
         }
 
         // ── Persist generated image as an asset ──────────────────────────
         let imageAssetId = null;
 
+        // If image url is valid
         if (imageUrl) {
           try {
+            // Fetch image from url
             const imgRes = await fetch(imageUrl);
+            
+            // If valid, save image locally and update database
             if (imgRes.ok) {
               const buffer      = Buffer.from(await imgRes.arrayBuffer());
               const contentType = imgRes.headers.get("content-type") || "image/jpeg";
@@ -469,6 +472,7 @@ router.post("/image", async (req, res) => {
         const updated  = await db.gallery.updateGalleryEntry(entryId, errPatch);
         activeJobs.delete(entryId);
         if (updated) emitter.emit("gallery:update", updated);
+        
       }
     })();
 

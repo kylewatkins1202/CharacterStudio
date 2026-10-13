@@ -27,8 +27,9 @@ const THUMB = (SCREEN_WIDTH - PAD * 2 - (COLS - 1) * GAP) / COLS;
 
 function AssetModal({ asset, colors, insets, onClose, navigation }) {
   const toast  = useToast();
+  
   const imgUrl = asset?.localUrl || asset?.url;
-
+  
   if (!asset) return null;
 
   const handleAddAsRef = () => {
@@ -154,7 +155,8 @@ export default function AssetsScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const colors = getTheme(AppStore.useState().theme);
   const toast  = useToast();
-
+  const baseUrl = AppStore.useState().serverUrl
+  
   const { folders, selectedFolder, assets, page, total, loading, loadingMore, uploading, showHidden } =
     AssetStore.useState();
 
@@ -167,6 +169,7 @@ export default function AssetsScreen({ navigation }) {
   const [createFolderVisible, setCreateFolderVisible] = useState(false);
   const [newFolderName,       setNewFolderName]       = useState("");
   const [creatingFolder,      setCreatingFolder]      = useState(false);
+
 
   useEffect(() => {
     AssetStore.actions.LOAD_FOLDERS();
@@ -443,7 +446,7 @@ export default function AssetsScreen({ navigation }) {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />}
           ListFooterComponent={loadingMore ? <ActivityIndicator color={colors.primary} style={{ padding: 16 }} /> : null}
           renderItem={({ item }) => {
-            const url        = item.localUrl || item.url;
+            const url        = item.url || localUrl;
             const isSelected = selectedIds.has(String(item.id));
             return (
               <TouchableOpacity
@@ -456,7 +459,7 @@ export default function AssetsScreen({ navigation }) {
                   borderWidth: isSelected ? 2 : 1,
                 }]}>
                   {url
-                    ? <Image source={{ uri: url }} style={[styles.thumb, { opacity: item.hidden ? 0.35 : 1 }]} resizeMode="cover" />
+                    ? <Image source={{ uri: baseUrl + url }} style={[styles.thumb, { opacity: item.hidden ? 0.35 : 1 }]} resizeMode="cover" />
                     : <View style={[styles.thumb, { backgroundColor: colors.surfaceSink }]} />
                   }
                   {isSelected && (

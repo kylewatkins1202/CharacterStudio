@@ -13,9 +13,9 @@
 /** @typedef {import('../types').ParsedImage} ParsedImage */
 /** @typedef {import('../types').UploadObject} UploadObject */
 /** @typedef {import('../types').CollageOptions} CollageOptions */
-
+const fs = require('fs/promises')
 const sharp = require("sharp")
-
+const path = require('path')
 /** Maximum allowed image size in bytes (20 MB). */
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024
 
@@ -34,6 +34,72 @@ function sanitizeTagKey(key) {
         .toLowerCase()
         .replace(/^@+/, "")
         .replace(/[^a-z0-9_-]/g, "")
+}
+
+/**
+ * Detects whether a string is a Base64 Data URI, a valid URL, or a File Path.
+ * @param {string} str - The input string to inspect.
+ * @returns {'data-uri' | 'url' | 'filepath' | 'unknown'}
+ */
+function detectStringType(str) {
+  if (typeof str !== 'string' || !str.trim()) {
+    return 'unknown';
+  }
+  
+  const trimmed = str.trim();
+
+  // 1. Check for Base64 Data URI
+  // Matches "data:[mediatype];base64,[data]"
+  const dataUriRegex = /^\s*data:[a-z]+\/[a-z0-9-+.]+(;[a-z0-9-]+=[a-z0-9-]+)*(;base64),([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?\s*$/i;
+  if (dataUriRegex.test(trimmed)) {
+    return 'data-uri';
+  }
+
+  // 3. Check for File Paths (Windows & Unix/POSIX)
+  // Unix absolute path: starts with /
+  // Windows absolute path: starts with C:\ or \\ (UNC share)
+  // Relative paths: starts with ./ or ../
+  const filePathRegex = /^([a-zA-Z]:[\\/ ]|\/[^/]|\\\\[^\\]|\.\.[\\/ ]|\.[\\/ ])/;
+  if (filePathRegex.test(trimmed)) {
+    return 'filepath';
+  }
+
+  // 2. Check for a valid URL (http, https, file, etc.)
+  try {
+    const parsedUrl = new URL(trimmed);
+    // Ensure it has a valid protocol and isn't just a drive letter evaluated as a protocol
+    if (parsedUrl.protocol && parsedUrl.protocol !== 'localhost:') {
+      return 'url';
+    }
+  } catch (e) {
+    // Not a valid URL structure, continue to check file path
+  }
+
+  return 'unknown';
+}
+
+/**
+ * Converts a file path into a Base64 Data URI
+ * @param {string} filePath - The path to the file
+ * @returns {string} The fully formatted Base64 Data URI
+ */
+async function filePathToDataUri(filePath) {
+  // 1. Read the file into a binary buffer
+  const fileBuffer = await fs.readFile(filePath);
+  
+  // 2. Convert the buffer to a base64 string
+  const base64Data = fileBuffer.toString('base64');
+  
+  // 3. Resolve the extension to guess the MIME type
+  const ext = path.extname(filePath).toLowerCase().replace('.', '');
+  
+  // 4. Construct common MIME types (adjust if using non-image files like application/pdf)
+  let mimeType = `image/${ext}`;
+  if (ext === 'pdf') mimeType = 'application/pdf';
+  if (ext === 'txt') mimeType = 'text/plain';
+
+  // 5. Combine into a complete Data URI
+  return `data:${mimeType};base64,${base64Data}`;
 }
 
 /**
@@ -238,5 +304,7 @@ module.exports = {
     base64ToUploadObject,
     normalizeToPngBuffer,
     createImageGridFromBuffers,
-    assetUrls
+    assetUrls,
+    filePathToDataUri,
+    detectStringType
 }

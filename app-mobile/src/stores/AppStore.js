@@ -89,4 +89,6 @@ const AppReducer = createReducer({
   },
 });
 
-export const AppStore = AppReducer.createFuseBox("AppStore");
+const AppStore = AppReducer.createFuseBox("AppStore");
+
+export {AppStore}
